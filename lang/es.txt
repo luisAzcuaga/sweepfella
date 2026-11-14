@@ -1,0 +1,223 @@
+# Sweepfella — Spanish
+# Format: key = text   ·   \n = line break   ·   {0}, {1:N0} = values filled in by the app
+# Keys missing here fall back to English.
+_name = Español
+_culture = es-MX
+format.long_date = d 'de' MMMM 'de' yyyy
+
+# ---- Window ----
+app.title = Sweepfella
+app.title_admin = Sweepfella (administrador)
+main.tab.cleanup = Limpieza
+main.tab.programs = Programas
+main.tab.leftovers = Restos
+main.admin_banner = Algunas funciones requieren permisos de administrador.
+main.restart_admin = Reiniciar como administrador
+main.busy.title = Idioma
+main.busy = Espera a que termine la tarea en curso antes de cambiar el idioma.
+
+# ---- Shared ----
+common.cancel = Cancelar
+common.cancelled = Cancelado.
+common.state.cancelled = Cancelado
+common.requires_admin = Requiere administrador
+common.error = Error: {0}
+common.search_cancelled = Búsqueda cancelada.
+ago.today = hoy
+ago.yesterday = ayer
+ago.days = hace {0} días
+ago.months = hace {0} meses
+ago.years = hace {0} años
+
+# ---- Cleanup tab ----
+cleaner.col.category = Categoría
+cleaner.col.files = Archivos
+cleaner.col.size = Tamaño
+cleaner.col.state = Estado
+cleaner.hint = Selecciona una categoría para ver qué limpia.
+cleaner.keep_recent = Conservar archivos temporales de las últimas 24 horas (recomendado)
+cleaner.status.start = Marca qué quieres limpiar y pulsa Analizar.
+cleaner.analyze = Analizar
+cleaner.clean = Limpiar
+cleaner.needs_admin = Requiere reiniciar Sweepfella como administrador.
+cleaner.check_one = Marca al menos una categoría.
+cleaner.cancelling = Cancelando…
+cleaner.confirm.title = Confirmar limpieza
+cleaner.confirm.header = Se van a borrar los archivos de:
+cleaner.confirm.estimate = Espacio estimado: {0}
+cleaner.confirm.open = Están abiertos: {0}. Ciérralos para limpiar su caché por completo; los archivos en uso se omitirán.
+cleaner.confirm.footer = Esta acción no se puede deshacer. ¿Continuar?
+cleaner.state.queued = En cola
+cleaner.state.cleaning = Limpiando…
+cleaner.state.analyzing = Analizando…
+cleaner.state.freed = Se liberaron {0}
+cleaner.state.in_use = {0:N0} en uso, omitidos
+cleaner.state.nothing = Nada que limpiar
+cleaner.state.can_clean = Se puede limpiar
+cleaner.status.cleaning = Limpiando: {0}
+cleaner.status.analyzing = Analizando: {0}
+cleaner.status.done = Listo: se liberaron {0}.
+cleaner.status.done_failed = {0:N0} archivos estaban en uso y se omitieron.
+cleaner.status.nothing = No hay nada que limpiar.
+cleaner.status.can_free = Se pueden liberar {0}. Pulsa Limpiar para borrarlos.
+
+# ---- Cleanup categories ----
+cat.group.system = Sistema
+cat.group.browsers = Navegadores
+cat.user_temp.name = Archivos temporales del usuario
+cat.user_temp.desc = Archivos que dejan instaladores y programas en tu carpeta temporal (%TEMP%).
+cat.win_temp.name = Archivos temporales de Windows
+cat.win_temp.desc = Archivos temporales del sistema en la carpeta Windows\Temp.
+cat.recycle.name = Papelera de reciclaje
+cat.recycle.desc = Vacía la papelera de todas las unidades.
+cat.wer_user.name = Informes de errores de programas
+cat.wer_user.desc = Informes y volcados de memoria de programas que se cerraron inesperadamente. Solo sirven para diagnosticar fallos.
+cat.wer_system.name = Informes y volcados del sistema
+cat.wer_system.desc = Informes de errores de Windows y volcados de memoria de pantallazos azules. Pueden ocupar varios GB.
+cat.thumbs.name = Caché de miniaturas
+cat.thumbs.desc = Miniaturas de fotos y videos que muestra el Explorador. Windows las regenera, así que las carpetas con muchas imágenes tardarán un poco más la primera vez. El Explorador mantiene algunas en uso.
+cat.shaders.name = Caché de shaders (DirectX y GPU)
+cat.shaders.desc = Shaders compilados por juegos y aplicaciones. Se regeneran solos, pero los juegos pueden dar tirones la primera vez que los abras después de limpiar.
+cat.browser.name = Caché de {0}
+cat.browser.desc = Copias de páginas web, scripts y shaders que {0} guarda para cargar más rápido. No borra historial, cookies, contraseñas ni pestañas.
+cat.firefox.desc = Copias de páginas web y miniaturas que Firefox guarda para cargar más rápido. No borra historial, cookies, contraseñas ni pestañas.
+
+# ---- Programs tab ----
+programs.col.name = Nombre
+programs.col.publisher = Editor
+programs.col.version = Versión
+programs.col.size = Tamaño
+programs.col.installed = Instalado
+programs.col.status = Estado
+programs.search = Buscar:
+programs.search_cue = Nombre o editor
+programs.scan = Buscar dependencias
+programs.refresh = Actualizar
+programs.open_location = Abrir ubicación
+programs.uninstall = Desinstalar…
+programs.select_hint = Selecciona un programa para ver qué es.
+programs.loading = Cargando programas…
+programs.count = {0} programas instalados.
+programs.scan_hint = Pulsa «Buscar dependencias» para saber qué programas usan cada runtime.
+programs.version = versión {0}
+programs.installed_on = instalado el {0}
+programs.section.about = Qué es
+programs.section.advice = Recomendación
+programs.section.used_by = Lo usan
+programs.more = … y {0} más
+programs.section.location = Ubicación
+programs.section.uninstaller = Desinstalador
+programs.section.registry = Registro
+programs.none = (ninguno)
+programs.scanning = Revisando {0}
+programs.scan_done = Listo: se revisaron {0:N0} ejecutables en {1} carpetas.
+programs.uninstall.title = Desinstalar
+programs.uninstall.missing = No se encontró el desinstalador de «{0}». Probablemente el programa ya se borró y solo quedó su entrada en la lista.
+programs.uninstall.ask = ¿Desinstalar «{0}»?
+programs.uninstall.superseded = Está reemplazado por «{0}», así que no debería afectar a ningún programa.
+programs.uninstall.not_scanned = Aún no has buscado dependencias: no se sabe qué programas lo usan.
+programs.uninstall.used = Atención: lo usan {0} programa(s):
+programs.uninstall.used_footer = Esos programas podrían dejar de abrir.
+programs.uninstall.start_failed = No se inició el desinstalador: {0}
+programs.uninstall.no_uninstaller = Este programa no tiene desinstalador.
+programs.uninstall.waiting = Esperando a que termine el desinstalador de «{0}»…
+programs.uninstall.still = «{0}» sigue instalado. Si su desinstalador aún está abierto, pulsa Actualizar cuando termine.
+programs.uninstall.done = Se desinstaló «{0}». Revisa la pestaña Restos por si dejó carpetas.
+
+kind.vc = Runtimes de Visual C++
+kind.net = Runtimes de .NET
+kind.game_runtimes = Componentes para juegos
+kind.drivers = Controladores y hardware
+kind.games = Juegos y lanzadores
+kind.dev = Herramientas de desarrollo
+kind.other = Programas
+
+status.uninstaller_missing = Desinstalador no encontrado
+status.superseded = Reemplazado por {0}
+status.unsupported = Sin soporte
+status.no_use = Sin uso detectado
+status.in_use = En uso ({0})
+
+advice.uninstaller_missing = El desinstalador ya no existe; probablemente el programa se borró a mano y solo quedó su entrada en la lista. Revisa la pestaña Restos por si dejó carpetas.
+advice.superseded = Se puede desinstalar: «{0}» es de la misma familia y más nuevo, así que los programas que usaban esta versión ya usan la nueva.
+advice.unsupported = Microsoft dejó de darle soporte el {0}: ya no recibe parches de seguridad.
+advice.not_scanned = Pulsa «Buscar dependencias» para ver qué programas lo usan.
+advice.used = Lo usan {0} programa(s) instalados. No lo desinstales mientras los conserves.
+advice.unused = No se encontró ningún programa que lo use en las carpetas de programas instalados. Puedes desinstalarlo; si algún juego o programa portable en otra carpeta deja de abrir, vuelve a instalarlo desde la web de Microsoft.
+
+about.vc14 = Bibliotecas de C++ que necesitan los programas compilados con Visual Studio 2015, 2017, 2019 o 2022. Esos cuatro comparten el mismo runtime: la versión más nueva sirve para todos.
+about.vc_year = Bibliotecas de C++ que necesitan los programas compilados con Visual Studio {0}. Es independiente de las demás versiones: no lo reemplaza ni el 2015-2022.
+about.vc_arch = Esta es la versión de {0}, para programas de {1} bits.
+about.net_sdk = Kit de desarrollo de .NET para programar. Los programas no lo necesitan para funcionar (les basta el runtime); si no programas en .NET, puedes quitarlo.
+about.net = Runtime que necesitan los {0} {1}. Cada versión principal es independiente: un programa para .NET {1} no funciona con .NET {2} ni con otra.
+about.net.desktop = programas de escritorio (ventanas) hechos con .NET
+about.net.asp = aplicaciones web y servicios hechos con ASP.NET Core
+about.net.core = programas hechos con .NET
+about.steam_game = Juego de Steam. Desinstálalo desde Steam para que también lo quite de tu biblioteca.
+about.by_publisher = Programa de {0}.
+about.webview2 = Motor web de Edge que usan Teams, Widgets, Office y muchas otras apps para dibujar su interfaz. No lo desinstales.
+about.health_tools = Lo instala Windows Update para mantener el sistema al día. Si lo quitas, se reinstala solo.
+about.pc_health = Revisa si el equipo es compatible con Windows 11. Puedes quitarlo sin problema.
+about.gameinput = Componente de Microsoft para mandos y dispositivos de entrada. Lo instalan juegos de Xbox / Game Pass.
+about.physx = Motor de física de NVIDIA que usan algunos juegos, sobre todo antiguos. Si ya no tienes esos juegos, puedes quitarlo.
+about.openal = Biblioteca de audio 3D que instalan algunos juegos antiguos.
+about.xna = Runtime de juegos hechos con XNA (muchos indies de 2008–2015). Si ya no tienes esos juegos, puedes quitarlo.
+about.directx = Componentes antiguos de DirectX (como D3DX9) que algunos juegos todavía piden.
+about.vulkan = Runtime de Vulkan, la API gráfica que usan muchos juegos. Lo instala el controlador de video; no lo quites.
+about.amd = Controlador o utilidad de AMD (gráficos o chipset). Mantenlo mientras uses ese hardware.
+about.nvidia = Controlador o utilidad de NVIDIA. Mantenlo mientras uses una tarjeta NVIDIA.
+about.realtek = Controlador de audio, red o lector de tarjetas de Realtek.
+about.intel = Controlador o utilidad de Intel.
+about.bonjour = Servicio de Apple para descubrir impresoras y dispositivos en la red. Lo instalan iTunes o algunos programas de Adobe; si no lo usas, se puede quitar.
+about.launcher = Tienda o lanzador de juegos.
+about.winsdk = Herramientas para crear apps de Windows. Si no programas para Windows, puedes quitarlo.
+about.python = Intérprete de Python. Lo usan scripts y herramientas de desarrollo.
+about.java = Entorno de Java. Lo necesitan los programas hechos en Java.
+about.devtool = Herramienta de desarrollo.
+
+# ---- Leftovers tab ----
+leftovers.col.folder = Carpeta
+leftovers.col.location = Ubicación
+leftovers.col.size = Tamaño
+leftovers.col.files = Archivos
+leftovers.col.last_change = Último cambio
+leftovers.col.note = Nota
+leftovers.intro = Busca carpetas en AppData, ProgramData y Archivos de programa que no pertenecen a ningún programa instalado, servicio, proceso, acceso directo ni controlador. Suelen ser restos de programas desinstalados. Revisa cada una antes de borrarla: algunas guardan partidas o configuraciones que quizá quieras conservar. Lo que borres va a la Papelera.
+leftovers.status.start = Pulsa «Buscar restos» para empezar.
+leftovers.find = Buscar restos
+leftovers.open = Abrir carpeta
+leftovers.ignore = Ignorar
+leftovers.remove = Mover a la papelera
+leftovers.remove_count = Mover a la papelera ({0}, {1})
+leftovers.collecting = Reuniendo programas, servicios y accesos directos…
+leftovers.none = No se encontraron restos.
+leftovers.found = {0} carpetas sin programa asociado ({1}).
+leftovers.note.admin = Requiere administrador para borrar
+leftovers.note.recent = Se modificó hace poco: puede que algo la use
+leftovers.note.empty = Vacía
+leftovers.ignore_save_failed = No se pudo guardar la lista de ignorados: {0}
+leftovers.ignored = {0} carpeta(s) ignorada(s); no volverán a aparecer.
+leftovers.confirm.title = Mover a la papelera
+leftovers.confirm.header = Se moverán a la Papelera:
+leftovers.confirm.more = … y {0} más
+leftovers.confirm.recent = Algunas se modificaron hace menos de un mes; puede que un programa todavía las use.
+leftovers.confirm.footer = Podrás restaurarlas desde la Papelera. ¿Continuar?
+leftovers.moving = Moviendo {0}…
+leftovers.err.cancelled = cancelado
+leftovers.err.denied = acceso denegado
+leftovers.err.try_admin = (prueba como administrador)
+leftovers.err.not_moved = no se pudo mover
+leftovers.err.protected = Ruta protegida: {0}
+leftovers.moved = {0} carpeta(s) movida(s) a la Papelera ({1}).
+leftovers.moved_errors = {0} con errores.
+leftovers.errors.title = Algunas carpetas no se movieron
+loc.program_files = Archivos de programa
+loc.program_files_x86 = Archivos de programa (x86)
+
+# ---- Console modes ----
+cli.requires_admin = (requiere administrador)
+cli.analyze_line = {0,-42} {1,9:N0} archivos {2,10}
+cli.total = Total: {0}
+cli.programs_header = Programas: {0}. Ejecutables revisados: {1:N0} en {2} carpetas.
+cli.used_by = usado por: {0}
+cli.leftovers_total = Total: {0} carpetas, {1}
