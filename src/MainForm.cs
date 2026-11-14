@@ -13,6 +13,9 @@ namespace Sweepfella
     {
         public WindowHost()
         {
+            Settings.SaveFailed += () => MessageBox.Show(
+                L.T("settings.readonly", AppDomain.CurrentDomain.BaseDirectory), L.T("settings.readonly.title"),
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
             Show(new MainForm(this, 0));
         }
 
@@ -41,6 +44,7 @@ namespace Sweepfella
         readonly LeftoversPage leftovers;
         readonly TabControl tabs = new TabControl { Dock = DockStyle.Fill, Padding = new Point(14, 5) };
         readonly ComboBox language = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110, Anchor = AnchorStyles.Top | AnchorStyles.Right };
+        readonly LinkLabel about = new LinkLabel { AutoSize = true, Anchor = AnchorStyles.Top | AnchorStyles.Right };
 
         public MainForm(WindowHost host, int tabIndex)
         {
@@ -53,7 +57,7 @@ namespace Sweepfella
             using (var icon = typeof(MainForm).Assembly.GetManifestResourceStream("sweepfella.ico"))
                 if (icon != null) Icon = new Icon(icon);
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = LoadSize() ?? new Size(830, 640);
+            ClientSize = LoadSize() ?? DefaultClientSize;
             MinimumSize = new Size(720, 480);
 
             cleaner = new CleanerPage(isAdmin);
@@ -66,7 +70,18 @@ namespace Sweepfella
             Controls.Add(tabs);
             if (!isAdmin) Controls.Add(AdminBanner());   // added last so it docks above the tabs
 
-            // Language picker floating to the right of the tabs.
+            // About link and language picker floating to the right of the tabs.
+            about.Text = L.T("main.about");
+            about.LinkClicked += (s, e) =>
+            {
+                using (var dialog = new AboutForm())
+                {
+                    dialog.ShowDialog(this);
+                    if (dialog.DataDeleted) Close();
+                }
+            };
+            Controls.Add(about);
+            about.BringToFront();
             language.DisplayMember = "Value";
             language.ValueMember = "Key";
             language.DataSource = L.Available();
@@ -90,6 +105,7 @@ namespace Sweepfella
         {
             int strip = tabs.TabCount > 0 ? tabs.GetTabRect(0).Height : language.Height;
             language.Location = new Point(tabs.Right - language.Width - 4, tabs.Top + Math.Max(0, (strip - language.Height) / 2));
+            about.Location = new Point(language.Left - about.Width - 12, tabs.Top + Math.Max(0, (strip - about.Height) / 2));
         }
 
         void OnLanguageChanged(object sender, EventArgs e)
@@ -136,6 +152,8 @@ namespace Sweepfella
 
         // ---- Window size remembered between sessions (in 96-DPI units) ----
 
+        static readonly Size DefaultClientSize = new Size(830, 640);
+
         static Size? LoadSize()
         {
             var parts = (Settings.Get("window") ?? "").Split('x');
@@ -145,11 +163,15 @@ namespace Sweepfella
             return null;
         }
 
+        /// <summary>Saves the window size only when the user actually resized it, so an untouched app writes nothing.</summary>
         void SaveSize()
         {
             if (WindowState != FormWindowState.Normal) return;
             float scale = Ui.DpiScale(this);
-            Settings.Set("window", (int)(ClientSize.Width / scale) + "x" + (int)(ClientSize.Height / scale));
+            var size = new Size((int)Math.Round(ClientSize.Width / scale), (int)Math.Round(ClientSize.Height / scale));
+            var saved = LoadSize() ?? DefaultClientSize;
+            if (Math.Abs(size.Width - saved.Width) > 2 || Math.Abs(size.Height - saved.Height) > 2)
+                Settings.Set("window", size.Width + "x" + size.Height);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

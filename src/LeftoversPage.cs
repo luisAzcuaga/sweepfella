@@ -197,9 +197,7 @@ namespace Sweepfella
                 ignored.Add(((Leftover)item.Tag).Path);
                 list.Items.Remove(item);
             }
-            try { LeftoverFinder.SaveIgnored(ignored); }
-            catch (IOException ex) { status.Text = L.T("leftovers.ignore_save_failed", ex.Message); return; }
-            catch (UnauthorizedAccessException ex) { status.Text = L.T("leftovers.ignore_save_failed", ex.Message); return; }
+            LeftoverFinder.SaveIgnored(ignored);
             status.Text = L.T("leftovers.ignored", items.Count);
             UpdateSelection();
         }

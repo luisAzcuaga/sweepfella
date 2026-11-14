@@ -19,6 +19,11 @@ namespace Sweepfella
         // The dependency scan is slow, so its result survives language changes (which rebuild the window).
         static UsageScanner lastScan;
 
+        // Free-space snapshots taken before each uninstall, keyed by registry path. Many uninstallers return
+        // before they finish (or hand off to a launcher), so the freed space is settled once the entry is gone.
+        static readonly Dictionary<string, Dictionary<string, long>> pendingUninstalls = new Dictionary<string, Dictionary<string, long>>();
+        static readonly Dictionary<string, long> settledUninstalls = new Dictionary<string, long>();
+
         readonly ListView list = new BufferedListView { MultiSelect = false, ShowItemToolTips = true };
         readonly TextBox search = new TextBox { Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(3, 5, 12, 3) };
         readonly RichTextBox details = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, BackColor = SystemColors.Window, DetectUrls = false };
@@ -111,9 +116,23 @@ namespace Sweepfella
             programs = await Task.Run(() => ProgramRegistry.Read());
             if (IsDisposed) return;
             if (lastScan != null) lastScan.Apply(programs);
+            SettleUninstalls();
             Fill();
             SetBusy(false, false);
             status.Text = L.T("programs.count", programs.Count) + (lastScan == null ? " " + L.T("programs.scan_hint") : "");
+        }
+
+        /// <summary>Counts the space freed by uninstalls whose entries have disappeared from the list.</summary>
+        void SettleUninstalls()
+        {
+            var installed = new HashSet<string>(programs.Select(x => x.RegistryPath), StringComparer.OrdinalIgnoreCase);
+            foreach (var key in pendingUninstalls.Keys.Where(k => !installed.Contains(k)).ToList())
+            {
+                long freed = DiskSpace.FreedSince(pendingUninstalls[key]);
+                pendingUninstalls.Remove(key);
+                settledUninstalls[key] = freed;
+                Stats.Add(freed);
+            }
         }
 
         void Fill()
@@ -279,21 +298,30 @@ namespace Sweepfella
                                 risky ? MessageBoxIcon.Warning : MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
 
             Process proc;
+            pendingUninstalls[p.RegistryPath] = DiskSpace.Snapshot();
             try { proc = ProgramRegistry.StartUninstall(p); }
             catch (Win32Exception ex)
             {
                 status.Text = L.T("programs.uninstall.start_failed", ex.Message);
                 return;
             }
-            if (proc == null) { status.Text = L.T("programs.uninstall.no_uninstaller"); return; }
+            if (proc == null)
+            {
+                pendingUninstalls.Remove(p.RegistryPath);
+                status.Text = L.T("programs.uninstall.no_uninstaller");
+                return;
+            }
 
             SetBusy(true, false);
             status.Text = L.T("programs.uninstall.waiting", p.Name);
             await Task.Run(() => { using (proc) proc.WaitForExit(); });
             if (IsDisposed) return;
             await ReloadAsync();
-            bool still = programs.Any(x => x.RegistryPath == p.RegistryPath);
-            status.Text = L.T(still ? "programs.uninstall.still" : "programs.uninstall.done", p.Name);
+            long freed;
+            if (settledUninstalls.TryGetValue(p.RegistryPath, out freed))
+                status.Text = L.T("programs.uninstall.done", p.Name, Bytes.Format(freed));
+            else
+                status.Text = L.T("programs.uninstall.still", p.Name);
         }
 
         void SetBusy(bool value, bool cancellable)

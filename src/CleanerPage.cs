@@ -230,6 +230,7 @@ namespace Sweepfella
                     item.SubItems[ColState].Text = L.T(r.Files == 0 ? "cleaner.state.nothing" : "cleaner.state.can_clean");
                 }
                 lastScan[cat] = remaining;
+                if (doClean) Stats.Add(r.Bytes);
                 total += r.Bytes;
                 failed += r.Failed;
                 progress.Value++;
@@ -241,7 +242,8 @@ namespace Sweepfella
             if (cancelled) status.Text = L.T("common.cancelled");
             else if (doClean)
                 status.Text = L.T("cleaner.status.done", Bytes.Format(total))
-                            + (failed > 0 ? " " + L.T("cleaner.status.done_failed", failed) : "");
+                            + (failed > 0 ? " " + L.T("cleaner.status.done_failed", failed) : "")
+                            + (Stats.Freed > total ? " " + L.T("cleaner.status.total", Bytes.Format(Stats.Freed)) : "");
             else status.Text = total == 0 ? L.T("cleaner.status.nothing") : L.T("cleaner.status.can_free", Bytes.Format(total));
 
             cts.Dispose();

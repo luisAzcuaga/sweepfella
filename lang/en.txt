@@ -14,6 +14,30 @@ main.admin_banner = Some features require administrator rights.
 main.restart_admin = Restart as administrator
 main.busy.title = Language
 main.busy = Wait for the current task to finish before changing the language.
+main.about = About
+
+# ---- About dialog ----
+about_dialog.title = About Sweepfella
+about_dialog.version = Version {0}
+about_dialog.tagline = A free Windows cleaner with no ads, telemetry or background monitor.
+about_dialog.source = Source code on GitHub
+about_dialog.coffee_note = If Sweepfella freed up some space for you, you can buy me a coffee.
+about_dialog.coffee = Buy me a coffee
+about_dialog.close = Close
+about_dialog.license = MIT License
+about_dialog.freed = Space freed: {0} since {1}
+about_dialog.freed_none = No space freed yet.
+about_dialog.reset = Reset
+about_dialog.reset_confirm = Reset the freed-space counter to zero?
+about_dialog.data_file = Settings are saved in:
+about_dialog.data_not_created = (not created yet: nothing has been saved)
+about_dialog.data_readonly = Sweepfella can't save its settings in this folder, so your language, window size, ignored folders and cleanup stats won't be remembered. Move Sweepfella.exe to a folder of your own, such as Documents\Sweepfella.
+about_dialog.delete_data = Delete my data and exit
+about_dialog.delete_confirm = This deletes Sweepfella's settings (language, window size, ignored folders and cleanup stats) and closes it without saving anything else:\n\n{0}\n\nContinue?
+
+# ---- Settings ----
+settings.readonly.title = Settings not saved
+settings.readonly = Sweepfella can't save its settings in {0}, so your language, window size, ignored folders and cleanup stats won't be remembered.\n\nMove Sweepfella.exe to a folder of your own, such as Documents\Sweepfella.
 
 # ---- Shared ----
 common.cancel = Cancel
@@ -57,6 +81,7 @@ cleaner.status.cleaning = Cleaning: {0}
 cleaner.status.analyzing = Analyzing: {0}
 cleaner.status.done = Done: freed {0}.
 cleaner.status.done_failed = {0:N0} files were in use and were skipped.
+cleaner.status.total = Total so far: {0}.
 cleaner.status.nothing = There's nothing to clean.
 cleaner.status.can_free = {0} can be freed. Press Clean to delete it.
 
@@ -121,7 +146,7 @@ programs.uninstall.start_failed = Couldn't start the uninstaller: {0}
 programs.uninstall.no_uninstaller = This program has no uninstaller.
 programs.uninstall.waiting = Waiting for the uninstaller of “{0}” to finish…
 programs.uninstall.still = “{0}” is still installed. If its uninstaller is still open, press Refresh when it finishes.
-programs.uninstall.done = “{0}” was uninstalled. Check the Leftovers tab in case it left folders behind.
+programs.uninstall.done = “{0}” was uninstalled and freed {1}. Check the Leftovers tab in case it left folders behind.
 
 kind.vc = Visual C++ runtimes
 kind.net = .NET runtimes
@@ -194,7 +219,6 @@ leftovers.found = {0} folders with no associated program ({1}).
 leftovers.note.admin = Requires administrator to delete
 leftovers.note.recent = Changed recently: something may be using it
 leftovers.note.empty = Empty
-leftovers.ignore_save_failed = Couldn't save the ignore list: {0}
 leftovers.ignored = {0} folder(s) ignored; they won't show up again.
 leftovers.confirm.title = Move to Recycle Bin
 leftovers.confirm.header = These will be moved to the Recycle Bin:

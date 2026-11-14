@@ -45,7 +45,7 @@ namespace Sweepfella
             "Temporary Internet Files", "ElevatedDiagnostics", "Diagnostics", "SquirrelTemp", "Package Cache", "regid.1991-06.com.microsoft",
             "ssh", "USOPrivate", "USOShared", "SoftwareDistribution", "Desktop", "Documents", "Start Menu", "Templates", "Favorites",
             "Common Files", "Internet Explorer", "ModifiableWindowsApps", "Reference Assemblies", "MSBuild", "Uninstall Information",
-            "dotnet", "PackageManagement", "WindowsPowerShell", "Sweepfella", "dbg", "Downloaded Installations", "NuGet", "IconCache",
+            "dotnet", "PackageManagement", "WindowsPowerShell", "dbg", "Downloaded Installations", "NuGet", "IconCache",
             "GroupPolicy", "VoiceAccess", "speech", "CEF", "comgr", "ToastNotificationManagerCompat", "Unity",   // LocalLow\Unity is shared by every Unity game
         };
 
@@ -132,26 +132,14 @@ namespace Sweepfella
 
         // ---- Folders the user chose to ignore (persisted) ----
 
-        static string IgnoreFile { get { return Path.Combine(Env.Roaming, "Sweepfella", "ignored.txt"); } }
-
         public static HashSet<string> LoadIgnored()
         {
-            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            try
-            {
-                if (File.Exists(IgnoreFile))
-                    foreach (var line in File.ReadAllLines(IgnoreFile, Encoding.UTF8))
-                        if (line.Trim().Length > 0) set.Add(line.Trim());
-            }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-            return set;
+            return new HashSet<string>(Settings.GetList("ignored"), StringComparer.OrdinalIgnoreCase);
         }
 
         public static void SaveIgnored(HashSet<string> set)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(IgnoreFile));
-            File.WriteAllLines(IgnoreFile, set.OrderBy(s => s, StringComparer.OrdinalIgnoreCase), Encoding.UTF8);
+            Settings.SetList("ignored", set);
         }
     }
 
@@ -264,10 +252,13 @@ namespace Sweepfella
 
         void CollectProcesses()
         {
+            int self;
+            using (var current = Process.GetCurrentProcess()) self = current.Id;
             foreach (var p in Process.GetProcesses())
             {
                 using (p)
                 {
+                    if (p.Id == self) continue;   // Sweepfella itself doesn't vouch for a "Sweepfella" folder
                     AddName(p.ProcessName);
                     try { AddFile("\"" + p.MainModule.FileName + "\""); }
                     catch (System.ComponentModel.Win32Exception) { }   // protected processes or another architecture
