@@ -55,8 +55,40 @@ namespace Sweepfella
             var name = new Label { AutoSize = true, Text = "Sweepfella", Font = new Font("Segoe UI", 16F, FontStyle.Bold), Margin = new Padding(0) };
             var version = new Label { AutoSize = true, Text = L.T("about_dialog.version", Version), ForeColor = SystemColors.GrayText, Margin = new Padding(2, 0, 0, 10) };
             var tagline = new Label { AutoSize = true, MaximumSize = new Size(330, 0), Text = L.T("about_dialog.tagline"), Margin = new Padding(2, 0, 0, 8) };
-            var source = new LinkLabel { AutoSize = true, Text = L.T("about_dialog.source"), Margin = new Padding(2, 0, 0, 16) };
+            var source = new LinkLabel { AutoSize = true, Text = L.T("about_dialog.source"), Margin = new Padding(2, 0, 0, 0) };
             source.LinkClicked += (s, e) => Open(RepoUrl);
+            var checkNow = new LinkLabel { AutoSize = true, Text = L.T("about_dialog.check_updates"), Margin = new Padding(14, 0, 0, 0) };
+            checkNow.LinkClicked += async (s, e) =>
+            {
+                checkNow.Enabled = false;
+                checkNow.Text = L.T("about_dialog.checking");
+                try
+                {
+                    var latest = await Updates.CheckNow();
+                    if (IsDisposed) return;
+                    if (!latest.IsNewer)
+                        MessageBox.Show(this, L.T("about_dialog.up_to_date", "v" + Version), Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    else if (MessageBox.Show(this, L.T("about_dialog.update_available", latest.Tag), Text, MessageBoxButtons.YesNo,
+                                             MessageBoxIcon.Information) == DialogResult.Yes)
+                        Open(latest.Url);
+                }
+                catch (Exception ex)   // offline, timeout, unexpected response…
+                {
+                    if (!IsDisposed) MessageBox.Show(this, L.T("about_dialog.update_failed", ex.Message), Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+                finally
+                {
+                    if (!IsDisposed)
+                    {
+                        checkNow.Text = L.T("about_dialog.check_updates");
+                        checkNow.Enabled = true;
+                    }
+                }
+            };
+            var links = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
+            links.Controls.AddRange(new Control[] { source, checkNow });
+            var atStartup = new CheckBox { AutoSize = true, Text = L.T("about_dialog.check_at_startup"), Checked = Updates.CheckAtStartup, Margin = new Padding(2, 0, 0, 16) };
+            atStartup.CheckedChanged += (s, e) => Updates.CheckAtStartup = atStartup.Checked;
             var coffeeNote = new Label { AutoSize = true, MaximumSize = new Size(330, 0), Text = L.T("about_dialog.coffee_note"), Margin = new Padding(2, 0, 0, 6) };
 
             var coffee = new Button
@@ -93,7 +125,7 @@ namespace Sweepfella
             freedRow.Controls.AddRange(new Control[] { freed, reset });
 
             var text = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = new Padding(0) };
-            text.Controls.AddRange(new Control[] { name, version, tagline, source, freedRow, coffeeNote, coffee });
+            text.Controls.AddRange(new Control[] { name, version, tagline, links, atStartup, freedRow, coffeeNote, coffee });
             text.Controls.AddRange(DataSection());
 
             var top = new TableLayoutPanel { AutoSize = true, ColumnCount = 2, Margin = new Padding(0) };

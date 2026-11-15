@@ -5,8 +5,8 @@ _culture = en-US
 format.long_date = MMMM d, yyyy
 
 # ---- Window ----
-app.title = Sweepfella
-app.title_admin = Sweepfella (administrator)
+app.title = Sweepfella {0}
+app.title_admin = Sweepfella {0} (administrator)
 main.tab.cleanup = Cleanup
 main.tab.programs = Programs
 main.tab.leftovers = Leftovers
@@ -15,12 +15,20 @@ main.restart_admin = Restart as administrator
 main.busy.title = Language
 main.busy = Wait for the current task to finish before changing the language.
 main.about = About
+update.available = Sweepfella {0} is available.
+update.download = Download
 
 # ---- About dialog ----
 about_dialog.title = About Sweepfella
 about_dialog.version = Version {0}
 about_dialog.tagline = A free Windows cleaner with no ads, telemetry or background monitor.
 about_dialog.source = Source code on GitHub
+about_dialog.check_updates = Check for updates
+about_dialog.checking = Checking…
+about_dialog.check_at_startup = Check for updates at startup
+about_dialog.up_to_date = You have the latest version ({0}).
+about_dialog.update_available = Sweepfella {0} is available. Open the download page?
+about_dialog.update_failed = Couldn't check for updates: {0}
 about_dialog.coffee_note = If Sweepfella freed up some space for you, you can buy me a coffee.
 about_dialog.coffee = Buy me a coffee
 about_dialog.close = Close
@@ -98,6 +106,8 @@ cat.wer_user.name = Program error reports
 cat.wer_user.desc = Reports and memory dumps from programs that closed unexpectedly. They're only useful for diagnosing crashes.
 cat.wer_system.name = System reports and dumps
 cat.wer_system.desc = Windows error reports and blue-screen memory dumps. They can take several GB.
+cat.old_versions.name = Older Sweepfella versions
+cat.old_versions.desc = Copies of older Sweepfella versions and their zip files in Downloads, Desktop, Documents and Sweepfella's own folder, plus the settings file they leave behind. The version you're running and newer ones are never touched.
 cat.thumbs.name = Thumbnail cache
 cat.thumbs.desc = Photo and video thumbnails shown by File Explorer. Windows rebuilds them, so folders with many pictures will take a bit longer the first time. Explorer keeps some of them in use.
 cat.shaders.name = Shader cache (DirectX and GPU)

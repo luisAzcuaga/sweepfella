@@ -20,6 +20,8 @@ namespace Sweepfella
         public bool IsRecycleBin;
         public readonly List<string> Dirs = new List<string>();          // contents are emptied, the folder itself is kept
         public readonly List<string[]> Patterns = new List<string[]>();  // { folder, pattern }, top level only
+        public Func<IEnumerable<string>> FileSource;  // files found by custom logic (e.g. older Sweepfella versions)
+        public Action<string> AfterDelete;            // called with each file deleted from FileSource
 
         public Category Dir(string path)
         {
@@ -89,6 +91,13 @@ namespace Sweepfella
              .Dir(Env.Combine(win, "Minidump"))
              .Dir(Env.Combine(win, "LiveKernelReports"))
              .Files(win, "MEMORY.DMP"));
+
+            list.Add(new Category
+            {
+                Group = system, Name = L.T("cat.old_versions.name"), DefaultChecked = true,
+                Description = L.T("cat.old_versions.desc"),
+                FileSource = OldVersions.Find, AfterDelete = OldVersions.CleanUpAfter,
+            });
 
             list.Add(new Category
             {
@@ -192,6 +201,14 @@ namespace Sweepfella
                     if (!Env.IsReparsePoint(f)) HandleFile(f, clean, cutoff, r);
                 }
             }
+
+            if (c.FileSource != null)
+                foreach (var path in c.FileSource())
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var f = new FileInfo(path);
+                    if (f.Exists && HandleFile(f, clean, cutoff, r) && clean && c.AfterDelete != null) c.AfterDelete(path);
+                }
             return r;
         }
 
@@ -230,21 +247,22 @@ namespace Sweepfella
             }
         }
 
-        static void HandleFile(FileInfo f, bool clean, DateTime cutoff, Result r)
+        /// <summary>Counts (or deletes) one file. Returns true if it was deleted.</summary>
+        static bool HandleFile(FileInfo f, bool clean, DateTime cutoff, Result r)
         {
             long length;
             try
             {
-                if (cutoff != DateTime.MinValue && Touched(f) > cutoff) return;
+                if (cutoff != DateTime.MinValue && Touched(f) > cutoff) return false;
                 length = f.Length;
             }
-            catch (IOException) { return; }
+            catch (IOException) { return false; }
 
             if (!clean)
             {
                 r.Files++;
                 r.Bytes += length;
-                return;
+                return false;
             }
             try
             {
@@ -252,9 +270,11 @@ namespace Sweepfella
                 f.Delete();
                 r.Files++;
                 r.Bytes += length;
+                return true;
             }
             catch (IOException) { r.Failed++; }
             catch (UnauthorizedAccessException) { r.Failed++; }
+            return false;
         }
 
         static void RecycleBin(bool clean, Result r)

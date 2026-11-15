@@ -53,7 +53,7 @@ namespace Sweepfella
             AutoScaleDimensions = new SizeF(96F, 96F);
             AutoScaleMode = AutoScaleMode.Dpi;
             Font = new Font("Segoe UI", 9F);
-            Text = L.T(isAdmin ? "app.title_admin" : "app.title");
+            Text = L.T(isAdmin ? "app.title_admin" : "app.title", "v" + AboutForm.Version);
             using (var icon = typeof(MainForm).Assembly.GetManifestResourceStream("sweepfella.ico"))
                 if (icon != null) Icon = new Icon(icon);
             StartPosition = FormStartPosition.CenterScreen;
@@ -68,7 +68,8 @@ namespace Sweepfella
             tabs.TabPages.Add(Page(L.T("main.tab.leftovers"), leftovers));
             tabs.SelectedIndex = Math.Max(0, Math.Min(tabIndex, tabs.TabCount - 1));
             Controls.Add(tabs);
-            if (!isAdmin) Controls.Add(AdminBanner());   // added last so it docks above the tabs
+            if (!isAdmin) Controls.Add(AdminBanner());   // added after the tabs so it docks above them
+            Controls.Add(updateBanner);                 // added last: topmost, shown once a newer release is found
 
             // About link and language picker floating to the right of the tabs.
             about.Text = L.T("main.about");
@@ -88,15 +89,49 @@ namespace Sweepfella
             Controls.Add(language);
             language.BringToFront();
             tabs.SizeChanged += (s, e) => PlaceLanguage();
+            tabs.LocationChanged += (s, e) => PlaceLanguage();
             language.SelectionChangeCommitted += OnLanguageChanged;
 
             ResumeLayout(false);
             PerformLayout();
         }
 
+        // ---- "A newer version is available" banner ----
+
+        static bool updateDismissed;   // closing the banner hides it for the rest of the session
+        readonly TableLayoutPanel updateBanner = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top, AutoSize = true, ColumnCount = 3, Padding = new Padding(8, 4, 4, 4),
+            BackColor = Color.FromArgb(222, 236, 255), Visible = false,
+        };
+
+        async void ShowUpdateBannerIfNeeded()
+        {
+            var latest = await Updates.StartupCheck();
+            if (latest == null || !latest.IsNewer || updateDismissed || IsDisposed) return;
+
+            var label = new Label { AutoSize = true, Anchor = AnchorStyles.Left, Text = L.T("update.available", latest.Tag) };
+            var download = Ui.MakeButton(L.T("update.download"), (s, e) =>
+            {
+                try { using (System.Diagnostics.Process.Start(latest.Url)) { } }
+                catch (System.ComponentModel.Win32Exception) { }
+            });
+            var close = new Button { Text = "×", FlatStyle = FlatStyle.Flat, AutoSize = true, Margin = new Padding(6, 3, 0, 3), Font = new Font(Font.FontFamily, 11F) };
+            close.FlatAppearance.BorderSize = 0;
+            close.Click += (s, e) => { updateDismissed = true; updateBanner.Visible = false; };
+            updateBanner.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            updateBanner.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            updateBanner.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            updateBanner.Controls.Add(label, 0, 0);
+            updateBanner.Controls.Add(download, 1, 0);
+            updateBanner.Controls.Add(close, 2, 0);
+            updateBanner.Visible = true;
+        }
+
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
+            ShowUpdateBannerIfNeeded();
             language.SelectedValue = L.Code;
             PlaceLanguage();
         }

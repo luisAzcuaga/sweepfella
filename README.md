@@ -8,6 +8,7 @@ One ~200 KB executable, no installer, no runtime to download: it runs on the .NE
 **Cleanup**
 Temporary files, Recycle Bin, error reports and crash dumps, thumbnail cache, DirectX/GPU shader cache and browser caches
 (Chrome, Edge, Brave, Vivaldi, Opera, Firefox — cache only: history, cookies and passwords are never touched).
+It also finds copies of older Sweepfella versions (and their zips) in Downloads, Desktop and Documents.
 Analyze first, confirm, then clean. Temporary files from the last 24 hours are kept by default so running installers don't break.
 Freed space is counted towards a lifetime total; for uninstalls it's measured as the free space each drive actually
 gained, so it reflects the real size rather than the size the program claims.
@@ -41,6 +42,13 @@ folders) or free some space. Deleting both files removes Sweepfella completely. 
 
 The About dialog shows where the settings live, how much space Sweepfella has freed so far, and a
 *Delete my data and exit* button.
+
+## Updates
+
+At startup Sweepfella asks GitHub, in the background, whether a newer release exists, and shows a banner with a
+download link if so. It's a single anonymous request to GitHub's public API: nothing is stored, nothing is downloaded
+or installed automatically, and failures (offline, timeouts) are silent. You can check by hand or turn the startup
+check off in the About dialog.
 
 ## Safety
 

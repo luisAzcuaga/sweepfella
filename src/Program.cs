@@ -20,6 +20,13 @@ namespace Sweepfella
                 case "--analyze": return Report(Analyze);
                 case "--programs": return Report(ListPrograms);
                 case "--leftovers": return Report(() => ListLeftovers(args.Contains("--all")));
+                case "--check-updates":
+                    return Report(() =>
+                    {
+                        var latest = Updates.CheckNow().Result;
+                        Console.WriteLine("Running v{0}; latest release {1} ({2}) {3}", Updates.Current.ToString(3), latest.Tag, latest.Url,
+                                          latest.IsNewer ? "is newer" : "is not newer");
+                    });
                 case "--inspect":
                     if (args.Length < 2) return Report(() => Console.WriteLine("Usage: --inspect <folder>"));
                     return Report(() => Inspect(args[1]));

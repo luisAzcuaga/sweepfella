@@ -6,8 +6,8 @@ _culture = es-MX
 format.long_date = d 'de' MMMM 'de' yyyy
 
 # ---- Window ----
-app.title = Sweepfella
-app.title_admin = Sweepfella (administrador)
+app.title = Sweepfella {0}
+app.title_admin = Sweepfella {0} (administrador)
 main.tab.cleanup = Limpieza
 main.tab.programs = Programas
 main.tab.leftovers = Restos
@@ -16,12 +16,20 @@ main.restart_admin = Reiniciar como administrador
 main.busy.title = Idioma
 main.busy = Espera a que termine la tarea en curso antes de cambiar el idioma.
 main.about = Acerca de
+update.available = Sweepfella {0} está disponible.
+update.download = Descargar
 
 # ---- About dialog ----
 about_dialog.title = Acerca de Sweepfella
 about_dialog.version = Versión {0}
 about_dialog.tagline = Un limpiador gratuito para Windows, sin anuncios, telemetría ni monitor en segundo plano.
 about_dialog.source = Código fuente en GitHub
+about_dialog.check_updates = Buscar actualizaciones
+about_dialog.checking = Buscando…
+about_dialog.check_at_startup = Buscar actualizaciones al iniciar
+about_dialog.up_to_date = Tienes la última versión ({0}).
+about_dialog.update_available = Sweepfella {0} está disponible. ¿Abrir la página de descarga?
+about_dialog.update_failed = No se pudo buscar actualizaciones: {0}
 about_dialog.coffee_note = Si Sweepfella te ayudó a liberar espacio, puedes invitarme un café.
 about_dialog.coffee = Invítame un café
 about_dialog.close = Cerrar
@@ -99,6 +107,8 @@ cat.wer_user.name = Informes de errores de programas
 cat.wer_user.desc = Informes y volcados de memoria de programas que se cerraron inesperadamente. Solo sirven para diagnosticar fallos.
 cat.wer_system.name = Informes y volcados del sistema
 cat.wer_system.desc = Informes de errores de Windows y volcados de memoria de pantallazos azules. Pueden ocupar varios GB.
+cat.old_versions.name = Versiones antiguas de Sweepfella
+cat.old_versions.desc = Copias de versiones antiguas de Sweepfella y sus zips en Descargas, Escritorio, Documentos y la carpeta de Sweepfella, junto con el archivo de configuración que dejan. La versión que estás usando y las más nuevas nunca se tocan.
 cat.thumbs.name = Caché de miniaturas
 cat.thumbs.desc = Miniaturas de fotos y videos que muestra el Explorador. Windows las regenera, así que las carpetas con muchas imágenes tardarán un poco más la primera vez. El Explorador mantiene algunas en uso.
 cat.shaders.name = Caché de shaders (DirectX y GPU)
