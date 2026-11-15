@@ -19,7 +19,10 @@ namespace Sweepfella
             {
                 case "--analyze": return Report(Analyze);
                 case "--programs": return Report(ListPrograms);
-                case "--leftovers": return Report(ListLeftovers);
+                case "--leftovers": return Report(() => ListLeftovers(args.Contains("--all")));
+                case "--inspect":
+                    if (args.Length < 2) return Report(() => Console.WriteLine("Usage: --inspect <folder>"));
+                    return Report(() => Inspect(args[1]));
             }
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
@@ -72,12 +75,31 @@ namespace Sweepfella
             }
         }
 
-        static void ListLeftovers()
+        static void Inspect(string dir)
+        {
+            var c = LeftoverFinder.Investigate(dir, CancellationToken.None);
+            Console.WriteLine(dir);
+            if (c.Running.Count > 0) Console.WriteLine(L.T("leftovers.clue.running") + ": " + string.Join(", ", c.Running));
+            if (c.OnlyCaches) Console.WriteLine(L.T("leftovers.clue.caches"));
+            if (c.UnityGames.Count > 0) Console.WriteLine(L.T("leftovers.clue.unity") + ": " + string.Join(", ", c.UnityGames));
+            if (c.WebView) Console.WriteLine(L.T("leftovers.clue.webview"));
+            if (c.Sources.Count > 0) Console.WriteLine(L.T("leftovers.clue.sources") + ": " + string.Join("; ", c.Sources));
+            Console.WriteLine(L.T("leftovers.clue.contents") + (c.Truncated ? " " + L.T("leftovers.clue.contents_partial") : "") + ":");
+            foreach (var kv in c.Contents.Take(10)) Console.WriteLine("  {0,10}  {1}", Bytes.Format(kv.Value), kv.Key);
+            if (c.LatestFile != null) Console.WriteLine(L.T("leftovers.clue.latest") + ": " + c.LatestFile + " (" + Ui.Ago(c.LatestChange) + ")");
+        }
+
+        static void ListLeftovers(bool includeInUse)
         {
             var found = LeftoverFinder.Find(LeftoverFinder.LoadIgnored(), null, CancellationToken.None);
-            foreach (var l in found.OrderByDescending(l => l.Bytes))
+            var leftovers = found.Where(l => !l.InUse).ToList();
+            foreach (var l in leftovers.OrderByDescending(l => l.Bytes))
                 Console.WriteLine("{0,10}  {1,-16} {2}", Bytes.Format(l.Bytes), Ui.Ago(l.LastChange), l.Path);
-            Console.WriteLine(L.T("cli.leftovers_total", found.Count, Bytes.Format(found.Sum(l => l.Bytes))));
+            Console.WriteLine(L.T("cli.leftovers_total", leftovers.Count, Bytes.Format(leftovers.Sum(l => l.Bytes))));
+            if (!includeInUse) return;
+            Console.WriteLine();
+            foreach (var l in found.Where(l => l.InUse).OrderBy(l => l.Path, StringComparer.OrdinalIgnoreCase))
+                Console.WriteLine("{0,-60} {1}", l.Path, l.Owner.Describe());
         }
     }
 }

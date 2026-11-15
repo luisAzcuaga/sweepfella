@@ -257,6 +257,30 @@ namespace Sweepfella
         }
     }
 
+    /// <summary>Formatted text for the read-only details panes (Programs and Leftovers tabs).</summary>
+    static class RichText
+    {
+        public static void Append(RichTextBox box, string text, Font font, Color? color)
+        {
+            box.SelectionStart = box.TextLength;
+            box.SelectionLength = 0;
+            box.SelectionFont = font ?? box.Font;
+            box.SelectionColor = color ?? box.ForeColor;
+            box.AppendText(text);
+        }
+
+        public static void Section(RichTextBox box, string heading, string body, Color? color)
+        {
+            Append(box, heading + "\n", new Font(box.Font, FontStyle.Bold), null);
+            Append(box, body + "\n\n", null, color);
+        }
+
+        public static void Title(RichTextBox box, string text)
+        {
+            Append(box, text + "\n", new Font(box.Font.FontFamily, box.Font.Size + 2, FontStyle.Bold), null);
+        }
+    }
+
     static class Ui
     {
         public static float DpiScale(Control c)

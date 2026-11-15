@@ -442,6 +442,33 @@ namespace Sweepfella
                 yield return Path.Combine(m.Groups[1].Value.Replace(@"\\", @"\"), "steamapps", "common");
         }
 
+        /// <summary>
+        /// Game folders Steam considers installed: steamapps\common\&lt;installdir&gt; named by an appmanifest_*.acf.
+        /// A folder in common without a manifest is what's left of an uninstalled game (mods, tools...).
+        /// </summary>
+        public static HashSet<string> InstalledSteamGames()
+        {
+            var installed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var common in SteamLibraries())
+            {
+                string[] manifests;
+                try { manifests = Directory.GetFiles(Path.GetDirectoryName(common), "appmanifest_*.acf"); }
+                catch (IOException) { continue; }
+                catch (UnauthorizedAccessException) { continue; }
+                foreach (var manifest in manifests)
+                {
+                    try
+                    {
+                        var m = Regex.Match(File.ReadAllText(manifest), @"""installdir""\s+""([^""]+)""");
+                        if (m.Success) installed.Add(Env.Normalize(Path.Combine(common, m.Groups[1].Value.Replace(@"\\", @"\"))));
+                    }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                }
+            }
+            return installed;
+        }
+
         public void Run(IProgress<string> progress, CancellationToken ct)
         {
             var lastReport = DateTime.MinValue;

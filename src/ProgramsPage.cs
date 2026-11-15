@@ -218,17 +218,12 @@ namespace Sweepfella
 
         void Section(string heading, string body, Color? color, Font bold)
         {
-            Append(heading + "\n", bold, null);
-            Append(body + "\n\n", null, color);
+            RichText.Section(details, heading, body, color);
         }
 
         void Append(string text, Font font, Color? color)
         {
-            details.SelectionStart = details.TextLength;
-            details.SelectionLength = 0;
-            details.SelectionFont = font ?? details.Font;
-            details.SelectionColor = color ?? details.ForeColor;
-            details.AppendText(text);
+            RichText.Append(details, text, font, color);
         }
 
         async void OnScan(object sender, EventArgs e)
