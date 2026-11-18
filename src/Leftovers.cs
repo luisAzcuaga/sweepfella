@@ -303,12 +303,15 @@ namespace Sweepfella
             }
         }
 
-        /// <summary>Sends the folder to the Recycle Bin (it can be restored).</summary>
-        public static void MoveToRecycleBin(string dir)
+        /// <summary>
+        /// Sends the folder to the Recycle Bin, or deletes it permanently when the user was told it can't go there
+        /// (see <see cref="RecycleBin.Predict"/>). <paramref name="owner"/> is the window Windows' own prompts belong to.
+        /// </summary>
+        public static void Remove(string dir, bool permanently, IntPtr owner)
         {
             if (!PathGuard.IsSafeToEmpty(dir)) throw new InvalidOperationException(L.T("leftovers.err.protected", dir));
-            Shell.RunSta(() => Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(
-                dir, Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin));
+            if (permanently) RecycleBin.DeletePermanently(dir, owner);
+            else RecycleBin.Move(dir, owner);
         }
 
         // ---- Folders the user chose to ignore (persisted) ----

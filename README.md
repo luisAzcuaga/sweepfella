@@ -26,7 +26,9 @@ An uninstaller that explains what each entry is. For Visual C++ and .NET runtime
 Finds folders in AppData (Roaming, Local, LocalLow), ProgramData, Program Files and your Steam libraries that no
 installed program, service, running process, shortcut or driver accounts for — what uninstallers leave behind,
 including the mods and shader caches of games you've uninstalled from Steam. Nothing is pre-selected, recently
-modified folders are flagged, and deleted folders go to the Recycle Bin. Folders you mark as ignored never show up again.
+modified folders are flagged, and deleted folders go to the Recycle Bin. A folder the Recycle Bin can't hold (bigger than
+its maximum size, or on a drive without one) is listed apart in the confirmation as a permanent deletion, instead of
+Windows silently destroying it. Folders you mark as ignored never show up again.
 
 - Select a folder to see **clues** about it: programs running from it, the publisher of the files inside, whether it
   only holds caches or logs, Unity game data (which may include saved games), the largest items and the latest change.

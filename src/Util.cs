@@ -201,6 +201,113 @@ namespace Sweepfella
         }
     }
 
+    /// <summary>What happens to an item sent to the Recycle Bin.</summary>
+    enum RecycleFate { Recycled, TooBig, NoBin }
+
+    /// <summary>
+    /// The Recycle Bin can't keep everything: a drive may have no bin (network shares, USB sticks), the bin may be
+    /// turned off for it, and an item bigger than the bin's maximum size can't go in at all. In those cases Windows
+    /// deletes the item permanently, and when confirmations are off it does so silently, so check before promising
+    /// the user they can restore it.
+    /// </summary>
+    static class RecycleBin
+    {
+        const string BitBucket = @"Software\Microsoft\Windows\CurrentVersion\Explorer\BitBucket\Volume\";
+
+        /// <summary>Predicts whether an item of <paramref name="bytes"/> at <paramref name="path"/> can go to the Recycle Bin.</summary>
+        public static RecycleFate Predict(string path, long bytes)
+        {
+            long max = MaxBytes(path);
+            if (max == 0) return RecycleFate.NoBin;
+            return max > 0 && bytes > max ? RecycleFate.TooBig : RecycleFate.Recycled;   // unknown: assume it fits (Move still asks)
+        }
+
+        /// <summary>Maximum size of the Recycle Bin on the path's drive: 0 when there's none or it's off, -1 when unknown.</summary>
+        public static long MaxBytes(string path)
+        {
+            try
+            {
+                string root = Path.GetPathRoot(Path.GetFullPath(path));
+                if (root.StartsWith(@"\\")) return 0;   // network share
+                var type = new DriveInfo(root).DriveType;
+                if (type == DriveType.Network || type == DriveType.Removable || type == DriveType.CDRom) return 0;
+
+                // The bin's settings are kept per volume GUID; GetVolumePathName also resolves folders mounted as drives.
+                var mount = new System.Text.StringBuilder(260);
+                var volume = new System.Text.StringBuilder(64);
+                if (!GetVolumePathName(path, mount, mount.Capacity) || !GetVolumeNameForVolumeMountPoint(mount.ToString(), volume, volume.Capacity))
+                    return -1;
+                string name = volume.ToString();   // \\?\Volume{guid}\
+                int open = name.IndexOf('{'), close = name.IndexOf('}');
+                if (open < 0 || close < open) return -1;
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(BitBucket + name.Substring(open, close - open + 1)))
+                {
+                    if (key == null) return -1;
+                    object nuke = key.GetValue("NukeOnDelete"), max = key.GetValue("MaxCapacity");
+                    if (nuke is int && (int)nuke != 0) return 0;
+                    return max is int ? (long)(uint)(int)max * 1024 * 1024 : -1;   // stored in MB
+                }
+            }
+            catch (ArgumentException) { return -1; }
+            catch (IOException) { return -1; }
+            catch (System.Security.SecurityException) { return -1; }
+            catch (UnauthorizedAccessException) { return -1; }
+            catch (NotSupportedException) { return -1; }
+        }
+
+        /// <summary>
+        /// Sends a file or folder to the Recycle Bin. If Windows can't keep it there it asks the user before deleting it
+        /// for good. That question only appears when the operation has an owner window; without one Windows deletes the
+        /// item silently, so pass the form's handle.
+        /// </summary>
+        public static void Move(string path, IntPtr owner)
+        {
+            Run(path, owner, FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_WANTNUKEWARNING);
+        }
+
+        /// <summary>Deletes a file or folder permanently; only after the user agreed to exactly that.</summary>
+        public static void DeletePermanently(string path, IntPtr owner)
+        {
+            Run(path, owner, FOF_NOCONFIRMATION);
+        }
+
+        static void Run(string path, IntPtr owner, ushort flags)
+        {
+            var op = new SHFILEOPSTRUCT { hwnd = owner, wFunc = FO_DELETE, pFrom = path + "\0\0", fFlags = flags };
+            int result = 0;
+            Shell.RunSta(() => result = SHFileOperation(ref op));
+            if (op.fAnyOperationsAborted || result == ERROR_CANCELLED) throw new OperationCanceledException();
+            if (result == ERROR_ACCESS_DENIED || result == DE_ACCESSDENIEDSRC) throw new UnauthorizedAccessException();
+            if (result != 0) throw new IOException(L.T("common.shell_error", result.ToString("X")));
+        }
+
+        const uint FO_DELETE = 3;
+        const ushort FOF_NOCONFIRMATION = 0x10, FOF_ALLOWUNDO = 0x40, FOF_WANTNUKEWARNING = 0x4000;
+        const int ERROR_ACCESS_DENIED = 5, DE_ACCESSDENIEDSRC = 0x78, ERROR_CANCELLED = 1223;
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        struct SHFILEOPSTRUCT
+        {
+            public IntPtr hwnd;
+            public uint wFunc;
+            public string pFrom;
+            public string pTo;
+            public ushort fFlags;
+            [MarshalAs(UnmanagedType.Bool)] public bool fAnyOperationsAborted;
+            public IntPtr hNameMappings;
+            public string lpszProgressTitle;
+        }
+
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+        static extern int SHFileOperation(ref SHFILEOPSTRUCT lpFileOp);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        static extern bool GetVolumePathName(string lpszFileName, System.Text.StringBuilder lpszVolumePathName, int cchBufferLength);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        static extern bool GetVolumeNameForVolumeMountPoint(string lpszVolumeMountPoint, System.Text.StringBuilder lpszVolumeName, int cchBufferLength);
+    }
+
     /// <summary>Sorts a ListView by column using each subitem's Tag (number, date) or its text.</summary>
     sealed class ColumnSorter : IComparer
     {

@@ -326,25 +326,44 @@ namespace Sweepfella
             if (items.Count == 0) return;
             var leftovers = items.Select(i => (Leftover)i.Tag).ToList();
 
-            var sb = new StringBuilder(L.T("leftovers.confirm.header")).Append("\n\n");
-            foreach (var l in leftovers.Take(15)) sb.Append("•  ").Append(l.Path).Append("  (").Append(Bytes.Format(l.Bytes)).Append(")\n");
-            if (leftovers.Count > 15) sb.Append(L.T("leftovers.confirm.more", leftovers.Count - 15)).Append('\n');
+            // Folders the Recycle Bin can't keep (too big, or no bin on their drive) are deleted for good: say so up front.
+            var fates = leftovers.ToDictionary(l => l, l => RecycleBin.Predict(l.Path, l.Bytes));
+            var recycled = leftovers.Where(l => fates[l] == RecycleFate.Recycled).ToList();
+            var permanent = leftovers.Where(l => fates[l] != RecycleFate.Recycled).ToList();
+            var sb = new StringBuilder();
+            if (recycled.Count > 0)
+            {
+                sb.Append(L.T("leftovers.confirm.header")).Append("\n\n");
+                AppendPaths(sb, recycled, null);
+            }
+            if (permanent.Count > 0)
+            {
+                if (sb.Length > 0) sb.Append('\n');
+                sb.Append(L.T("leftovers.confirm.permanent_header")).Append("\n\n");
+                AppendPaths(sb, permanent, l => L.T(fates[l] == RecycleFate.TooBig ? "leftovers.confirm.too_big" : "leftovers.confirm.no_bin"));
+            }
             if (leftovers.Any(l => l.RecentlyUsed)) sb.Append('\n').Append(L.T("leftovers.confirm.recent")).Append('\n');
-            sb.Append('\n').Append(L.T("leftovers.confirm.footer"));
-            if (MessageBox.Show(this, sb.ToString(), L.T("leftovers.confirm.title"), MessageBoxButtons.YesNo, MessageBoxIcon.Question,
+            sb.Append('\n').Append(L.T(permanent.Count == 0 ? "leftovers.confirm.footer"
+                                      : recycled.Count == 0 ? "leftovers.confirm.footer_permanent" : "leftovers.confirm.footer_mixed"));
+            if (MessageBox.Show(this, sb.ToString(), L.T(permanent.Count == 0 ? "leftovers.confirm.title" : "leftovers.confirm.title_permanent"),
+                                MessageBoxButtons.YesNo, permanent.Count == 0 ? MessageBoxIcon.Question : MessageBoxIcon.Warning,
                                 MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
 
+            // Windows only asks before destroying something it can't recycle when its prompt has an owner window.
+            var form = FindForm();
+            IntPtr owner = form != null ? form.Handle : IntPtr.Zero;
             SetBusy(true, false);
-            int ok = 0;
-            long freed = 0;
+            int moved = 0, deleted = 0;
+            long movedBytes = 0, deletedBytes = 0;
             var errors = new List<string>();
             foreach (var item in items)
             {
                 var l = (Leftover)item.Tag;
-                status.Text = L.T("leftovers.moving", l.Name);
+                bool permanently = fates[l] != RecycleFate.Recycled;
+                status.Text = L.T(permanently ? "leftovers.deleting" : "leftovers.moving", l.Name);
                 string error = await Task.Run(() =>
                 {
-                    try { LeftoverFinder.MoveToRecycleBin(l.Path); return null; }
+                    try { LeftoverFinder.Remove(l.Path, permanently, owner); return null; }
                     catch (OperationCanceledException) { return L.T("leftovers.err.cancelled"); }
                     catch (IOException ex) { return ex.Message; }
                     catch (UnauthorizedAccessException) { return L.T("leftovers.err.denied") + (isAdmin ? "" : " " + L.T("leftovers.err.try_admin")); }
@@ -353,17 +372,32 @@ namespace Sweepfella
                 if (IsDisposed) return;
                 if (error == null && !Directory.Exists(l.Path))
                 {
-                    ok++;
-                    freed += l.Bytes;
+                    if (permanently) { deleted++; deletedBytes += l.Bytes; }
+                    else { moved++; movedBytes += l.Bytes; }
                     found.Remove(l);
                     list.Items.Remove(item);
                 }
                 else errors.Add(l.Name + ": " + (error ?? L.T("leftovers.err.not_moved")));
             }
             SetBusy(false, false);
-            status.Text = L.T("leftovers.moved", ok, Bytes.Format(freed)) + (errors.Count > 0 ? " " + L.T("leftovers.moved_errors", errors.Count) : "");
+            var summary = new List<string>();
+            if (moved > 0 || deleted == 0) summary.Add(L.T("leftovers.moved", moved, Bytes.Format(movedBytes)));
+            if (deleted > 0) summary.Add(L.T("leftovers.deleted", deleted, Bytes.Format(deletedBytes)));
+            if (errors.Count > 0) summary.Add(L.T("leftovers.moved_errors", errors.Count));
+            status.Text = string.Join(" ", summary);
             if (errors.Count > 0)
                 MessageBox.Show(this, string.Join("\n", errors.Take(20)), L.T("leftovers.errors.title"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        static void AppendPaths(StringBuilder sb, List<Leftover> leftovers, Func<Leftover, string> note)
+        {
+            foreach (var l in leftovers.Take(15))
+            {
+                sb.Append("•  ").Append(l.Path).Append("  (").Append(Bytes.Format(l.Bytes));
+                if (note != null) sb.Append(", ").Append(note(l));
+                sb.Append(")\n");
+            }
+            if (leftovers.Count > 15) sb.Append(L.T("leftovers.confirm.more", leftovers.Count - 15)).Append('\n');
         }
 
         void SetBusy(bool value, bool cancellable)
