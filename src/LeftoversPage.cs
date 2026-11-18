@@ -12,12 +12,12 @@ namespace Sweepfella
 {
     sealed class LeftoversPage : UserControl
     {
-        static readonly Color Warning = Color.FromArgb(176, 96, 0);
+        static Color Warning { get { return Theme.Warning; } }
 
         readonly bool isAdmin;
         readonly ListView list = new BufferedListView { CheckBoxes = true, MultiSelect = true, ShowItemToolTips = true };
         readonly Label intro = new Label { AutoSize = true, Padding = new Padding(0, 0, 0, 8), Text = L.T("leftovers.intro") };
-        readonly RichTextBox details = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, BackColor = SystemColors.Window, DetectUrls = false };
+        readonly RichTextBox details = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, BackColor = Theme.Surface, DetectUrls = false };
         readonly LinkLabel webSearch = new LinkLabel { Dock = DockStyle.Bottom, AutoSize = true, Padding = new Padding(0, 4, 0, 2), Visible = false };
         readonly SplitContainer split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal };
         CancellationTokenSource detailsCts;
@@ -98,7 +98,7 @@ namespace Sweepfella
             base.OnLoad(e);
             Ui.ScaleColumns(list);
             Ui.FillColumn(list, 0);
-            split.SplitterDistance = Math.Max(100, split.Height - (int)(190 * Ui.DpiScale(this)));
+            Ui.DockDetailsPane(split, 190);
         }
 
         IEnumerable<Leftover> Checked
@@ -206,7 +206,7 @@ namespace Sweepfella
                     Ui.AddSub(item, Ui.Ago(l.LastChange), l.LastChange);
                     string note = l.Owner.Describe();
                     Ui.AddSub(item, note, note);
-                    foreach (ListViewItem.ListViewSubItem s in item.SubItems) s.ForeColor = SystemColors.GrayText;
+                    foreach (ListViewItem.ListViewSubItem s in item.SubItems) s.ForeColor = Theme.Subtle;
                     list.Items.Add(item);
                 }
             }
@@ -248,16 +248,16 @@ namespace Sweepfella
         {
             details.Clear();
             RichText.Title(details, l.Name);
-            RichText.Append(details, l.Path + "\n", null, SystemColors.GrayText);
+            RichText.Append(details, l.Path + "\n", null, Theme.Subtle);
             string summary = l.Bytes >= 0 ? L.T("leftovers.details.summary", Bytes.Format(l.Bytes), l.Files, Ui.Ago(l.LastChange))
                            : c != null ? L.T("leftovers.details.summary", Bytes.Format(c.TotalBytes), c.TotalFiles, Ui.Ago(l.LastChange))
                            : L.T("leftovers.details.summary_unmeasured", Ui.Ago(l.LastChange));
-            RichText.Append(details, summary + "\n\n", null, SystemColors.GrayText);
+            RichText.Append(details, summary + "\n\n", null, Theme.Subtle);
             if (l.InUse)
                 RichText.Section(details, L.T("leftovers.clue.owner"), L.T("leftovers.clue.owner_body", l.Owner.Describe(), l.Owner.Owner), Warning);
             if (c == null)
             {
-                RichText.Append(details, L.T("leftovers.details.looking"), null, SystemColors.GrayText);
+                RichText.Append(details, L.T("leftovers.details.looking"), null, Theme.Subtle);
                 return;
             }
 
@@ -286,7 +286,7 @@ namespace Sweepfella
                 RichText.Section(details, L.T("leftovers.clue.contents"), contents, null);
             }
             if (c.LatestFile != null)
-                RichText.Section(details, L.T("leftovers.clue.latest"), c.LatestFile + "   (" + Ui.Ago(c.LatestChange) + ")", SystemColors.GrayText);
+                RichText.Section(details, L.T("leftovers.clue.latest"), c.LatestFile + "   (" + Ui.Ago(c.LatestChange) + ")", Theme.Subtle);
             details.SelectionStart = 0;
             details.ScrollToCaret();
         }

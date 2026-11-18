@@ -57,9 +57,10 @@ check off in the About dialog.
 - A path guard refuses to empty critical folders (Windows, user profile, AppData roots, Program Files…) even if a path is miscomputed.
 - Runs without admin rights; features that need them say so and offer to restart elevated.
 
-## Languages
+## Languages and themes
 
-English (default) and Spanish, switchable from the window. Translations live in [`lang/`](lang) as plain
+Light and dark themes, or follow Windows' own setting (the default, which also switches live when you change it in
+Windows). English (default) and Spanish. Both are picked from the top-right corner of the window. Translations live in [`lang/`](lang) as plain
 `key = text` files embedded in the executable; to add a language, copy `lang/en.txt`, translate it and rebuild.
 Missing keys fall back to English.
 

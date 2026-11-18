@@ -15,6 +15,9 @@ main.restart_admin = Restart as administrator
 main.busy.title = Language
 main.busy = Wait for the current task to finish before changing the language.
 main.about = About
+theme.system = System theme
+theme.light = Light
+theme.dark = Dark
 update.available = Sweepfella {0} is available.
 update.download = Download
 

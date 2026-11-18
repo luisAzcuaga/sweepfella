@@ -18,7 +18,7 @@ namespace Sweepfella
         readonly List<Category> categories = Catalog.Build();
         readonly Dictionary<Category, Result> lastScan = new Dictionary<Category, Result>();
         readonly ListView list = new BufferedListView { CheckBoxes = true, MultiSelect = false, HeaderStyle = ColumnHeaderStyle.Nonclickable };
-        readonly Label description = new Label { AutoSize = true, Padding = new Padding(0, 8, 0, 4), ForeColor = SystemColors.GrayText, Text = L.T("cleaner.hint") };
+        readonly Label description = new Label { AutoSize = true, Padding = new Padding(0, 8, 0, 4), ForeColor = Theme.Subtle, Text = L.T("cleaner.hint") };
         readonly CheckBox keepRecent = new CheckBox { AutoSize = true, Checked = true, Margin = new Padding(3, 6, 12, 3), Text = L.T("cleaner.keep_recent") };
         readonly ProgressBar progress = new ProgressBar { Dock = DockStyle.Fill, Margin = new Padding(3, 8, 3, 4) };
         readonly Label status = new Label { AutoSize = true, Anchor = AnchorStyles.Left, Text = L.T("cleaner.status.start") };
@@ -96,7 +96,7 @@ namespace Sweepfella
                     Tag = c,
                     Checked = c.DefaultChecked && !locked,
                 };
-                if (locked) item.ForeColor = SystemColors.GrayText;
+                if (locked) item.ForeColor = Theme.Subtle;
                 list.Items.Add(item);
             }
             populating = false;
@@ -113,7 +113,7 @@ namespace Sweepfella
         {
             if (list.SelectedItems.Count == 0) return;
             var c = (Category)list.SelectedItems[0].Tag;
-            description.ForeColor = ForeColor;
+            description.ForeColor = Theme.Text;
             description.Text = c.Description + (c.RequiresAdmin && !isAdmin ? " " + L.T("cleaner.needs_admin") : "");
         }
 

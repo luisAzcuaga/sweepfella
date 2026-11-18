@@ -311,6 +311,27 @@ namespace Sweepfella
             if (list.Columns[index].Width != width) list.Columns[index].Width = width;
         }
 
+        /// <summary>
+        /// Gives the bottom panel of a horizontal SplitContainer about <paramref name="height"/> px (at 96 DPI).
+        /// It's applied the first time the container has a real size — a page that hasn't been shown yet may still be
+        /// 150×150 — and always clamped to the valid range, since an out-of-range SplitterDistance throws.
+        /// </summary>
+        public static void DockDetailsPane(SplitContainer split, int height)
+        {
+            bool done = false;
+            Action apply = () =>
+            {
+                int pane = (int)(height * DpiScale(split));
+                if (done || split.Height < pane * 2) return;
+                int max = split.Height - split.Panel2MinSize - split.SplitterWidth;
+                if (max <= split.Panel1MinSize) return;
+                split.SplitterDistance = Math.Max(split.Panel1MinSize, Math.Min(max, split.Height - pane));
+                done = true;
+            };
+            split.SizeChanged += (s, e) => apply();
+            apply();
+        }
+
         public static Button MakeButton(string text, EventHandler onClick)
         {
             var b = new Button { Text = text, AutoSize = true, MinimumSize = new Size(96, 28), Margin = new Padding(6, 3, 0, 3), FlatStyle = FlatStyle.System };

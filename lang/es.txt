@@ -16,6 +16,9 @@ main.restart_admin = Reiniciar como administrador
 main.busy.title = Idioma
 main.busy = Espera a que termine la tarea en curso antes de cambiar el idioma.
 main.about = Acerca de
+theme.system = Tema del sistema
+theme.light = Claro
+theme.dark = Oscuro
 update.available = Sweepfella {0} está disponible.
 update.download = Descargar
 

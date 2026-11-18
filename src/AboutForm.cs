@@ -53,7 +53,7 @@ namespace Sweepfella
                     using (var icon = new Icon(stream, 64, 64)) logo.Image = icon.ToBitmap();
 
             var name = new Label { AutoSize = true, Text = "Sweepfella", Font = new Font("Segoe UI", 16F, FontStyle.Bold), Margin = new Padding(0) };
-            var version = new Label { AutoSize = true, Text = L.T("about_dialog.version", Version), ForeColor = SystemColors.GrayText, Margin = new Padding(2, 0, 0, 10) };
+            var version = new Label { AutoSize = true, Text = L.T("about_dialog.version", Version), ForeColor = Theme.Subtle, Margin = new Padding(2, 0, 0, 10) };
             var tagline = new Label { AutoSize = true, MaximumSize = new Size(330, 0), Text = L.T("about_dialog.tagline"), Margin = new Padding(2, 0, 0, 8) };
             var source = new LinkLabel { AutoSize = true, Text = L.T("about_dialog.source"), Margin = new Padding(2, 0, 0, 0) };
             source.LinkClicked += (s, e) => Open(RepoUrl);
@@ -137,7 +137,7 @@ namespace Sweepfella
             CancelButton = close;
             // "© 2026 Luis Azcuaga · MIT License", with only the license part as a link.
             string license = L.T("about_dialog.license");
-            var copyright = new LinkLabel { AutoSize = true, Text = Copyright + " · " + license, ForeColor = SystemColors.GrayText, Anchor = AnchorStyles.Left };
+            var copyright = new LinkLabel { AutoSize = true, Text = Copyright + " · " + license, ForeColor = Theme.Subtle, Anchor = AnchorStyles.Left };
             copyright.LinkArea = new LinkArea(copyright.Text.Length - license.Length, license.Length);
             copyright.LinkClicked += (s, e) => Open(LicenseUrl);
             var footer = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, ColumnCount = 2, Margin = new Padding(0, 18, 0, 0) };
@@ -151,6 +151,7 @@ namespace Sweepfella
             root.Controls.Add(top, 0, 0);
             root.Controls.Add(footer, 0, 1);
             Controls.Add(root);
+            Theme.Apply(this);
             ResumeLayout(false);
             PerformLayout();
         }
@@ -162,7 +163,7 @@ namespace Sweepfella
         Control[] DataSection()
         {
             var controls = new List<Control>();
-            var gray = SystemColors.GrayText;
+            var gray = Theme.Subtle;
             controls.Add(new Label { AutoSize = true, ForeColor = gray, Text = L.T("about_dialog.data_file"), Margin = new Padding(2, 18, 0, 0) });
             // Zero-width spaces after each backslash let long paths wrap at folder boundaries.
             string path = Settings.FilePath.Replace("\\", "\\​");
@@ -172,7 +173,7 @@ namespace Sweepfella
             if (!Settings.CanWrite)
                 controls.Add(new Label
                 {
-                    AutoSize = true, MaximumSize = new Size(330, 0), ForeColor = Color.FromArgb(176, 96, 0),
+                    AutoSize = true, MaximumSize = new Size(330, 0), ForeColor = Theme.Warning,
                     Text = L.T("about_dialog.data_readonly"), Margin = new Padding(2, 2, 0, 4),
                 });
 

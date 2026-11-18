@@ -14,7 +14,7 @@ namespace Sweepfella
 {
     sealed class ProgramsPage : UserControl
     {
-        static readonly Color Warning = Color.FromArgb(176, 96, 0);
+        static Color Warning { get { return Theme.Warning; } }
 
         // The dependency scan is slow, so its result survives language changes (which rebuild the window).
         static UsageScanner lastScan;
@@ -26,7 +26,7 @@ namespace Sweepfella
 
         readonly ListView list = new BufferedListView { MultiSelect = false, ShowItemToolTips = true };
         readonly TextBox search = new TextBox { Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(3, 5, 12, 3) };
-        readonly RichTextBox details = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, BackColor = SystemColors.Window, DetectUrls = false };
+        readonly RichTextBox details = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, BackColor = Theme.Surface, DetectUrls = false };
         readonly SplitContainer split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal };
         readonly ProgressBar progress = new ProgressBar { Width = 160, Style = ProgressBarStyle.Marquee, MarqueeAnimationSpeed = 0, Visible = false, Anchor = AnchorStyles.Left };
         readonly Label status = new Label { AutoSize = true, Anchor = AnchorStyles.Left, Text = L.T("programs.loading") };
@@ -102,7 +102,7 @@ namespace Sweepfella
         {
             base.OnLoad(e);
             Ui.ScaleColumns(list);
-            split.SplitterDistance = Math.Max(100, split.Height - (int)(170 * Ui.DpiScale(this)));
+            Ui.DockDetailsPane(split, 170);
             IntPtr cue = Marshal.StringToHGlobalUni(L.T("programs.search_cue"));
             Native.SendMessage(search.Handle, 0x1501 /* EM_SETCUEBANNER */, new IntPtr(1), cue);
             Marshal.FreeHGlobal(cue);
@@ -155,7 +155,7 @@ namespace Sweepfella
                 Ui.AddSub(item, p.InstallDate.HasValue ? p.InstallDate.Value.ToString("d") : "", p.InstallDate ?? DateTime.MinValue);
                 var state = Ui.AddSub(item, p.StatusText, p.StatusText);
                 if (NeedsAttention(p)) state.ForeColor = Warning;
-                if (p.UninstallerMissing) foreach (ListViewItem.ListViewSubItem s in item.SubItems) s.ForeColor = SystemColors.GrayText;
+                if (p.UninstallerMissing) foreach (ListViewItem.ListViewSubItem s in item.SubItems) s.ForeColor = Theme.Subtle;
                 list.Items.Add(item);
                 if (p == selected) item.Selected = true;
             }
@@ -196,7 +196,7 @@ namespace Sweepfella
                 p.SizeBytes > 0 ? Bytes.Format(p.SizeBytes) : null,
                 p.InstallDate.HasValue ? L.T("programs.installed_on", p.InstallDate.Value.ToString("d")) : null,
             }.Where(s => !string.IsNullOrEmpty(s));
-            Append(string.Join(" · ", facts) + "\n\n", null, SystemColors.GrayText);
+            Append(string.Join(" · ", facts) + "\n\n", null, Theme.Subtle);
 
             if (p.About.Length > 0) Section(L.T("programs.section.about"), p.About, null, bold);
             string advice = p.Advice;
@@ -208,8 +208,8 @@ namespace Sweepfella
                 Section(L.T("programs.section.used_by"), users, null, bold);
             }
             if (p.InstallLocation != null) Section(L.T("programs.section.location"), p.InstallLocation, null, bold);
-            Section(L.T("programs.section.uninstaller"), p.UninstallString ?? L.T("programs.none"), SystemColors.GrayText, bold);
-            Section(L.T("programs.section.registry"), p.RegistryPath, SystemColors.GrayText, bold);
+            Section(L.T("programs.section.uninstaller"), p.UninstallString ?? L.T("programs.none"), Theme.Subtle, bold);
+            Section(L.T("programs.section.registry"), p.RegistryPath, Theme.Subtle, bold);
             details.SelectionStart = 0;
             details.ScrollToCaret();
             openLocation.Enabled = !busy && p.InstallLocation != null;
@@ -307,9 +307,26 @@ namespace Sweepfella
                 return;
             }
 
-            SetBusy(true, false);
+            SetBusy(true, true);
+            cts = new CancellationTokenSource();
+            var token = cts.Token;
             status.Text = L.T("programs.uninstall.waiting", p.Name);
-            await Task.Run(() => { using (proc) proc.WaitForExit(); });
+            try
+            {
+                await Task.Run(() => { using (proc) while (!proc.WaitForExit(500)) token.ThrowIfCancellationRequested(); });
+                // Many uninstallers (Inno Setup, NSIS…) relaunch a copy of themselves from a temp folder and exit at once,
+                // so the first process ending doesn't mean the uninstall is done. Keep checking until the entry disappears.
+                var deadline = DateTime.UtcNow + UninstallWait;
+                while (!IsDisposed && DateTime.UtcNow < deadline
+                       && await Task.Run(() => ProgramRegistry.Read(true).Any(x => x.RegistryPath == p.RegistryPath)))
+                    await Task.Delay(2000, token);
+            }
+            catch (OperationCanceledException) { }   // the user stopped waiting
+            finally
+            {
+                cts.Dispose();
+                cts = null;
+            }
             if (IsDisposed) return;
             await ReloadAsync();
             long freed;
@@ -318,6 +335,8 @@ namespace Sweepfella
             else
                 status.Text = L.T("programs.uninstall.still", p.Name);
         }
+
+        static readonly TimeSpan UninstallWait = TimeSpan.FromMinutes(15);   // uninstallers may wait for the user to click through
 
         void SetBusy(bool value, bool cancellable)
         {
