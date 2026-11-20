@@ -26,6 +26,7 @@ namespace Sweepfella
             public readonly List<ListViewItem> Children = new List<ListViewItem>();
             public readonly HashSet<string> Excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             public List<string> Listed = new List<string>();   // last listing, kept after collapsing so the choice sticks
+            public List<Entry> Entries;                         // the same listing with sizes (null until listed)
 
             /// <summary>The listed entries left checked, or null when everything is (the plain, whole-category clean).</summary>
             public HashSet<string> Selection()
@@ -219,6 +220,7 @@ namespace Sweepfella
             if (version != n.Version) return;
 
             n.Listed = entries.Select(e => e.Path).ToList();
+            n.Entries = entries;
             bool locked = Locked(cat);
             syncing = true;
             list.BeginUpdate();
@@ -254,7 +256,9 @@ namespace Sweepfella
                 syncing = false;
             }
             UpdateMark(n);
-            if (!busy) n.Item.SubItems[ColState].Text = entries.Count == 0 ? L.T("cleaner.state.nothing") : SelectionText(n);
+            if (busy) return;   // a run in progress fills the columns itself
+            ShowTotals(n);
+            n.Item.SubItems[ColState].Text = entries.Count == 0 ? L.T("cleaner.state.nothing") : SelectionText(n);
         }
 
         static string Where(Entry e)
@@ -317,8 +321,8 @@ namespace Sweepfella
                         }
                     }
                 }
-                lastScan.Remove(node.Category);
                 UpdateMark(node);
+                ShowTotals(node);
                 if (!busy) node.Item.SubItems[ColState].Text = SelectionText(node);
             }
             finally { syncing = false; }
@@ -339,11 +343,30 @@ namespace Sweepfella
             {
                 node.Excluded.Clear();
                 foreach (var c in node.Children) c.Checked = true;
-                lastScan.Remove(node.Category);
                 UpdateMark(node);
+                ShowTotals(node);
                 node.Item.SubItems[ColState].Text = SelectionText(node);
             }
             finally { syncing = false; }
+        }
+
+        /// <summary>
+        /// Fills a listed category's Files and Size with what it would clean: the entries left checked, or all of them.
+        /// A listing is an analysis (it walks the same files), so it also feeds the confirmation's estimate.
+        /// </summary>
+        void ShowTotals(Node n)
+        {
+            if (n.Entries == null)
+            {
+                lastScan.Remove(n.Category);
+                return;
+            }
+            var only = n.Item.Checked ? n.Selection() : null;
+            var picked = only == null ? n.Entries : n.Entries.Where(e => only.Contains(e.Path)).ToList();
+            var r = new Result { Files = picked.Sum(e => e.Files), Bytes = picked.Sum(e => e.Bytes) };
+            n.Item.SubItems[ColFiles].Text = r.Files.ToString("N0");
+            n.Item.SubItems[ColSize].Text = Bytes.Format(r.Bytes);
+            lastScan[n.Category] = r;
         }
 
         /// <summary>Shows a category's checkbox as mixed while only some of its entries are selected.</summary>
