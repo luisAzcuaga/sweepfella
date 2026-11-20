@@ -118,6 +118,16 @@ namespace Sweepfella
              .Dir(Env.Combine(local, "AMD", "GLCache"))
              .Dir(Env.Combine(local, "Intel", "ShaderCache")));
 
+            // Driver packages unpack here and never clean up after themselves. The root ACL lets any user
+            // modify them, so no admin is needed; the age filter skips an install that's still running.
+            string drive = Path.GetPathRoot(win);
+            list.Add(new Category
+            {
+                Group = system, Name = L.T("cat.driver_installers.name"), UsesAgeFilter = true,
+                Description = L.T("cat.driver_installers.desc", Env.Combine(drive, "AMD"), Env.Combine(drive, "NVIDIA")),
+            }.Dir(Env.Combine(drive, "AMD"))
+             .Dir(Env.Combine(drive, "NVIDIA")));
+
             AddChromium(list, "Google Chrome", "chrome", Env.Combine(local, "Google", "Chrome", "User Data"));
             AddChromium(list, "Microsoft Edge", "msedge", Env.Combine(local, "Microsoft", "Edge", "User Data"));
             AddChromium(list, "Brave", "brave", Env.Combine(local, "BraveSoftware", "Brave-Browser", "User Data"));
