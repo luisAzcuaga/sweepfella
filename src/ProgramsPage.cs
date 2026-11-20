@@ -24,7 +24,7 @@ namespace Sweepfella
         static readonly Dictionary<string, Dictionary<string, long>> pendingUninstalls = new Dictionary<string, Dictionary<string, long>>();
         static readonly Dictionary<string, long> settledUninstalls = new Dictionary<string, long>();
 
-        readonly ListView list = new BufferedListView { MultiSelect = false, ShowItemToolTips = true };
+        readonly BufferedListView list = new BufferedListView { MultiSelect = false, ShowItemToolTips = true };
         readonly TextBox search = new TextBox { Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(3, 5, 12, 3) };
         readonly RichTextBox details = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, BackColor = Theme.Surface, DetectUrls = false };
         readonly SplitContainer split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal };
@@ -139,6 +139,7 @@ namespace Sweepfella
         {
             var selected = Selected;
             string filter = search.Text.Trim();
+            list.SaveGroupStates();
             list.BeginUpdate();
             list.Items.Clear();
             list.Groups.Clear();
@@ -161,6 +162,7 @@ namespace Sweepfella
             }
             foreach (var g in groups.Values.Where(g => g.Items.Count == 0).ToList()) list.Groups.Remove(g);
             list.EndUpdate();
+            list.MakeGroupsCollapsible();
             Ui.FillColumn(list, 0);
             ShowDetails();
         }

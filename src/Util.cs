@@ -461,8 +461,16 @@ namespace Sweepfella
         }
     }
 
+    /// <summary>
+    /// The list used across the app: double-buffered details view whose groups can be collapsed (Windows' own
+    /// chevron) and whose group headers stay readable in dark mode, where Windows draws them like plain items.
+    /// </summary>
     class BufferedListView : ListView
     {
+        readonly HashSet<string> collapsed = new HashSet<string>(StringComparer.CurrentCulture);
+        bool collapsible;
+        Font headerFont;
+
         public BufferedListView()
         {
             DoubleBuffered = true;
@@ -471,6 +479,228 @@ namespace Sweepfella
             HideSelection = false;
             Dock = DockStyle.Fill;
         }
+
+        /// <summary>Remembers which groups the user collapsed; call before clearing the groups to refill them.</summary>
+        public void SaveGroupStates()
+        {
+            if (!IsHandleCreated) return;
+            foreach (var g in NativeGroups())
+            {
+                if ((g.State & LVGS_COLLAPSED) != 0) collapsed.Add(g.Header);
+                else collapsed.Remove(g.Header);
+            }
+        }
+
+        /// <summary>Lets every group be collapsed, restoring the ones the user had collapsed. Call after (re)filling the groups.</summary>
+        public void MakeGroupsCollapsible()
+        {
+            collapsible = true;
+            if (!IsHandleCreated) return;   // applied once the handle exists
+            foreach (var g in NativeGroups())
+            {
+                uint state = LVGS_COLLAPSIBLE | (collapsed.Contains(g.Header) ? LVGS_COLLAPSED : 0);
+                var info = new LVGROUP { cbSize = Marshal.SizeOf(typeof(LVGROUP)), mask = LVGF_STATE, stateMask = LVGS_COLLAPSIBLE | LVGS_COLLAPSED, state = state };
+                SendMessage(Handle, LVM_SETGROUPINFO, (IntPtr)g.Id, ref info);
+            }
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            if (collapsible) BeginInvoke((Action)MakeGroupsCollapsible);
+        }
+
+        protected override void OnFontChanged(EventArgs e)
+        {
+            base.OnFontChanged(e);
+            if (headerFont != null) { headerFont.Dispose(); headerFont = null; }
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            // WinForms handles left clicks itself and the native collapse never happens, so toggle the group here.
+            // The whole header is the target, not just the small chevron.
+            if (collapsible && (m.Msg == WM_LBUTTONDOWN || m.Msg == WM_LBUTTONDBLCLK) && ToggleGroupAt(m.LParam)) return;
+
+            // Dark mode: Windows draws group headers like plain items (white, no separator line), so after it draws
+            // one, repaint its text in bold accent color with a line, leaving the collapse chevron alone.
+            if (m.Msg == WM_REFLECT_NOTIFY && Theme.IsDark && Groups.Count > 0)
+            {
+                var hdr = (NMHDR)Marshal.PtrToStructure(m.LParam, typeof(NMHDR));
+                if (hdr.code == NM_CUSTOMDRAW)
+                {
+                    var cd = (NMLVCUSTOMDRAW)Marshal.PtrToStructure(m.LParam, typeof(NMLVCUSTOMDRAW));
+                    if (cd.dwItemType == LVCDI_GROUP)
+                    {
+                        if (cd.nmcd.dwDrawStage == CDDS_PREPAINT) { m.Result = (IntPtr)CDRF_NOTIFYPOSTPAINT; return; }
+                        if (cd.nmcd.dwDrawStage == CDDS_POSTPAINT)
+                        {
+                            PaintGroupHeader(cd.nmcd.hdc, (int)cd.nmcd.dwItemSpec.ToInt64());
+                            m.Result = IntPtr.Zero;
+                            return;
+                        }
+                    }
+                }
+            }
+            base.WndProc(ref m);
+        }
+
+        bool ToggleGroupAt(IntPtr lParam)
+        {
+            long lp = lParam.ToInt64();
+            var hit = new LVHITTESTINFO { pt = new Point((short)(lp & 0xFFFF), (short)((lp >> 16) & 0xFFFF)), iGroup = -1 };
+            SendMessage(Handle, LVM_HITTEST, (IntPtr)(-1), ref hit);   // wParam -1: also report group parts
+            if ((hit.flags & (LVHT_EX_GROUP_HEADER | LVHT_EX_GROUP_COLLAPSE)) == 0 || hit.iGroup < 0) return false;
+            var group = NativeGroup(hit.iGroup);
+            if (group == null || (group.State & LVGS_COLLAPSIBLE) == 0) return false;
+            bool collapse = (group.State & LVGS_COLLAPSED) == 0;
+            var info = new LVGROUP { cbSize = Marshal.SizeOf(typeof(LVGROUP)), mask = LVGF_STATE, stateMask = LVGS_COLLAPSED, state = collapse ? LVGS_COLLAPSED : 0 };
+            SendMessage(Handle, LVM_SETGROUPINFO, (IntPtr)group.Id, ref info);
+            if (collapse) collapsed.Add(group.Header);
+            else collapsed.Remove(group.Header);
+            Focus();
+            return true;
+        }
+
+        void PaintGroupHeader(IntPtr hdc, int id)
+        {
+            var rect = new RECT { top = LVGGR_HEADER };
+            if (SendMessage(Handle, LVM_GETGROUPRECT, (IntPtr)id, ref rect) == IntPtr.Zero) return;
+            var group = NativeGroup(id);
+            if (group == null) return;
+            var header = Rectangle.FromLTRB(rect.left, rect.top, rect.right, rect.bottom);
+            // Leave the collapse chevron (drawn by Windows at the right end) as it is.
+            if ((group.State & LVGS_COLLAPSIBLE) != 0) header.Width -= header.Height + 6;
+            if (header.Width <= 0) return;
+            if (headerFont == null) headerFont = new Font(Font, FontStyle.Bold);
+            using (var g = Graphics.FromHdc(hdc))
+            {
+                using (var back = new SolidBrush(BackColor)) g.FillRectangle(back, header);
+                int pad = (int)Math.Round(8 * g.DpiX / 96f);
+                var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis;
+                var textRect = new Rectangle(header.Left + pad, header.Top, header.Width - pad, header.Height);
+                TextRenderer.DrawText(g, group.Header, headerFont, textRect, Theme.Accent, flags);
+                int textWidth = TextRenderer.MeasureText(g, group.Header, headerFont, textRect.Size, flags).Width;
+                int lineStart = textRect.Left + textWidth + pad, y = header.Top + header.Height / 2;
+                if (lineStart < header.Right - pad)
+                    using (var line = new Pen(Theme.Border)) g.DrawLine(line, lineStart, y, header.Right - pad, y);
+            }
+        }
+
+        sealed class GroupInfo
+        {
+            public int Id;
+            public string Header;
+            public uint State;
+        }
+
+        IEnumerable<GroupInfo> NativeGroups()
+        {
+            int count = (int)SendMessage(Handle, LVM_GETGROUPCOUNT, IntPtr.Zero, IntPtr.Zero);
+            for (int i = 0; i < count; i++)
+            {
+                var g = QueryGroup(LVM_GETGROUPINFOBYINDEX, i);
+                if (g != null) yield return g;
+            }
+        }
+
+        GroupInfo NativeGroup(int id) { return QueryGroup(LVM_GETGROUPINFO, id); }
+
+        GroupInfo QueryGroup(int message, int key)
+        {
+            const int Chars = 260;
+            IntPtr buffer = Marshal.AllocHGlobal(Chars * 2);
+            try
+            {
+                var info = new LVGROUP
+                {
+                    cbSize = Marshal.SizeOf(typeof(LVGROUP)), mask = LVGF_HEADER | LVGF_GROUPID | LVGF_STATE,
+                    stateMask = LVGS_COLLAPSIBLE | LVGS_COLLAPSED, pszHeader = buffer, cchHeader = Chars,
+                };
+                if (SendMessage(Handle, message, (IntPtr)key, ref info) == IntPtr.Zero && message == LVM_GETGROUPINFOBYINDEX) return null;
+                return new GroupInfo { Id = info.iGroupId, Header = Marshal.PtrToStringUni(buffer) ?? "", State = info.state };
+            }
+            finally { Marshal.FreeHGlobal(buffer); }
+        }
+
+        const int WM_REFLECT_NOTIFY = 0x204E, NM_CUSTOMDRAW = -12, LVCDI_GROUP = 1;
+        const int WM_LBUTTONDOWN = 0x201, WM_LBUTTONDBLCLK = 0x203, LVM_HITTEST = 0x1012;
+        const uint LVHT_EX_GROUP_HEADER = 0x10000000, LVHT_EX_GROUP_COLLAPSE = 0x40000000;
+        const int CDDS_PREPAINT = 0x1, CDDS_POSTPAINT = 0x2, CDRF_NOTIFYPOSTPAINT = 0x10;
+        const int LVM_GETGROUPINFO = 0x1095, LVM_SETGROUPINFO = 0x1093, LVM_GETGROUPCOUNT = 0x1098, LVM_GETGROUPINFOBYINDEX = 0x1099, LVM_GETGROUPRECT = 0x1062;
+        const int LVGGR_HEADER = 1;
+        const uint LVGF_HEADER = 0x1, LVGF_STATE = 0x4, LVGF_GROUPID = 0x10, LVGS_COLLAPSED = 0x1, LVGS_COLLAPSIBLE = 0x8;
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct RECT { public int left, top, right, bottom; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct NMHDR { public IntPtr hwndFrom; public IntPtr idFrom; public int code; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct LVHITTESTINFO { public Point pt; public uint flags; public int iItem; public int iSubItem; public int iGroup; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct NMCUSTOMDRAW
+        {
+            public NMHDR hdr;
+            public int dwDrawStage;
+            public IntPtr hdc;
+            public RECT rc;
+            public IntPtr dwItemSpec;
+            public uint uItemState;
+            public IntPtr lItemlParam;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct NMLVCUSTOMDRAW
+        {
+            public NMCUSTOMDRAW nmcd;
+            public int clrText, clrTextBk, iSubItem, dwItemType, clrFace, iIconEffect, iIconPhase, iPartId, iStateId;
+            public RECT rcText;
+            public uint uAlign;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        struct LVGROUP
+        {
+            public int cbSize;
+            public uint mask;
+            public IntPtr pszHeader;
+            public int cchHeader;
+            public IntPtr pszFooter;
+            public int cchFooter;
+            public int iGroupId;
+            public uint stateMask;
+            public uint state;
+            public uint uAlign;
+            public IntPtr pszSubtitle;
+            public uint cchSubtitle;
+            public IntPtr pszTask;
+            public uint cchTask;
+            public IntPtr pszDescriptionTop;
+            public uint cchDescriptionTop;
+            public IntPtr pszDescriptionBottom;
+            public uint cchDescriptionBottom;
+            public int iTitleImage;
+            public int iExtendedImage;
+            public int iFirstItem;
+            public uint cItems;
+            public IntPtr pszSubsetTitle;
+            public uint cchSubsetTitle;
+        }
+
+        [DllImport("user32.dll")]
+        static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, ref LVGROUP lParam);
+
+        [DllImport("user32.dll")]
+        static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, ref RECT lParam);
+
+        [DllImport("user32.dll")]
+        static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, ref LVHITTESTINFO lParam);
     }
 
     /// <summary>Formatted text for the read-only details panes (Programs and Leftovers tabs).</summary>

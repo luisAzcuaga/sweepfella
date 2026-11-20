@@ -15,7 +15,7 @@ namespace Sweepfella
         static Color Warning { get { return Theme.Warning; } }
 
         readonly bool isAdmin;
-        readonly ListView list = new BufferedListView { CheckBoxes = true, MultiSelect = true, ShowItemToolTips = true };
+        readonly BufferedListView list = new BufferedListView { CheckBoxes = true, MultiSelect = true, ShowItemToolTips = true };
         readonly Label intro = new Label { AutoSize = true, Padding = new Padding(0, 0, 0, 8), Text = L.T("leftovers.intro") };
         readonly RichTextBox details = new RichTextBox { Dock = DockStyle.Fill, ReadOnly = true, BorderStyle = BorderStyle.None, BackColor = Theme.Surface, DetectUrls = false };
         readonly LinkLabel webSearch = new LinkLabel { Dock = DockStyle.Bottom, AutoSize = true, Padding = new Padding(0, 4, 0, 2), Visible = false };
@@ -165,6 +165,7 @@ namespace Sweepfella
 
         void Fill()
         {
+            list.SaveGroupStates();
             list.BeginUpdate();
             list.Items.Clear();
             list.Groups.Clear();
@@ -213,6 +214,7 @@ namespace Sweepfella
                 }
             }
             list.EndUpdate();
+            list.MakeGroupsCollapsible();
             Ui.FillColumn(list, 0);
             UpdateSelection();
             ShowDetails();
