@@ -63,6 +63,12 @@ namespace Sweepfella
             return "[" + key + "]";
         }
 
+        /// <summary>True if the current language (or the fallback) has a text for key.</summary>
+        public static bool Has(string key)
+        {
+            return current.ContainsKey(key) || (fallback != null && fallback.ContainsKey(key));
+        }
+
         public static string T(string key, params object[] args)
         {
             return string.Format(Culture ?? CultureInfo.CurrentCulture, T(key), args);

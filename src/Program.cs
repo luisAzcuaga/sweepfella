@@ -19,6 +19,7 @@ namespace Sweepfella
             {
                 case "--analyze": return Report(Analyze);
                 case "--details": return Report(Details);
+                case "--registry": return Report(Registry);
                 case "--programs": return Report(ListPrograms);
                 case "--leftovers": return Report(() => ListLeftovers(args.Contains("--all")));
                 case "--check-updates":
@@ -77,7 +78,29 @@ namespace Sweepfella
             }
         }
 
-                static void ListPrograms()
+                static void Registry()
+        {
+            var findings = RepairScanner.Scan();
+            foreach (var area in RepairScanner.Areas)
+            {
+                Console.WriteLine("== " + L.T("repairs.area." + area));
+                foreach (var f in findings.Where(f => f.Area == area))
+                {
+                    string name = L.T("repair." + f.Id + ".name") + (f.Subject != null ? ": " + f.Subject : "");
+                    Console.WriteLine("  {0,-10} {1,-45} {2}", L.T("repairs.status." + f.Status.ToString().ToLowerInvariant()), name, f.Found);
+                    if (f.Status != RepairStatus.Ok)
+                    {
+                        Console.WriteLine("             expected: " + f.Expected);
+                        foreach (var where in f.Locations) Console.WriteLine("             at: " + where);
+                        if (f.Note != null) Console.WriteLine("             note: " + f.Note);
+                    }
+                }
+            }
+            int changed = findings.Count(f => f.Status == RepairStatus.Changed), unusual = findings.Count(f => f.Status == RepairStatus.Unusual);
+            Console.WriteLine(changed + unusual == 0 ? L.T("repairs.summary_ok", findings.Count) : L.T("repairs.summary", changed, unusual, findings.Count));
+        }
+
+        static void ListPrograms()
         {
             var programs = ProgramRegistry.Read();
             var scanner = new UsageScanner(programs);

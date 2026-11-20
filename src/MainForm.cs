@@ -64,6 +64,7 @@ namespace Sweepfella
         readonly CleanerPage cleaner;
         readonly ProgramsPage programs;
         readonly LeftoversPage leftovers;
+        readonly RepairsPage repairs;
         readonly PageHost pages = new PageHost();
         readonly LinkLabel about = new LinkLabel { AutoSize = true, Margin = new Padding(0, 10, 14, 0) };
         readonly ComboBox theme = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110, Margin = new Padding(0, 6, 8, 0) };
@@ -86,9 +87,11 @@ namespace Sweepfella
             cleaner = new CleanerPage(isAdmin);
             programs = new ProgramsPage();
             leftovers = new LeftoversPage(isAdmin);
+            repairs = new RepairsPage();
             pages.AddPage(L.T("main.tab.cleanup"), cleaner);
             pages.AddPage(L.T("main.tab.programs"), programs);
             pages.AddPage(L.T("main.tab.leftovers"), leftovers);
+            pages.AddPage(L.T("main.tab.repairs"), repairs);
             pages.SelectedIndex = pageIndex;
             Controls.Add(pages);
             if (!isAdmin) Controls.Add(AdminBanner());   // added after the pages so it docks above them
@@ -122,7 +125,7 @@ namespace Sweepfella
             PerformLayout();
         }
 
-        public bool IsBusy { get { return cleaner.IsBusy || programs.IsBusy || leftovers.IsBusy; } }
+        public bool IsBusy { get { return cleaner.IsBusy || programs.IsBusy || leftovers.IsBusy || repairs.IsBusy; } }
         public int SelectedPage { get { return pages.SelectedIndex; } }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)

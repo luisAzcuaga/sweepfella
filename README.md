@@ -82,6 +82,13 @@ From WSL:
 ./build.sh --console  # bin/Sweepfella-console.exe — same app with a console, for the read-only report modes below
 ```
 
+**Repairs**
+Checks registry settings that malware is known to change: blocked Task Manager, Registry Editor or command prompt,
+programs redirected through Image File Execution Options, a hijacked sign-in (`Winlogon` Shell/Userinit),
+`AppInit_DLLs`, broken `.exe` handling, "Show hidden files" that won't stick, Microsoft Defender turned off by policy,
+missing Safe Mode keys and a forced proxy. Each one is compared with Windows' default and explained, including when it
+can be legitimate. For now it only reports.
+
 Read-only reports (they never delete anything):
 
 ```sh
@@ -89,6 +96,7 @@ Sweepfella-console.exe --analyze     # what the Cleanup tab would free
 Sweepfella-console.exe --details     # the same, item by item
 Sweepfella-console.exe --programs    # installed programs, runtime status and dependencies
 Sweepfella-console.exe --leftovers   # leftover folders
+Sweepfella-console.exe --registry    # the Repairs tab's checks
 Sweepfella-console.exe --inspect <folder>   # clues about who owns a folder
 ```
 
