@@ -18,7 +18,9 @@ namespace Sweepfella
         public bool DefaultChecked;
         public bool UsesAgeFilter;             // honors "keep files from the last 24 hours"
         public bool IsRecycleBin;
+        public bool RemoveEmptyDirs;           // also delete each Dirs folder itself once it ends up empty
         public readonly List<string> Dirs = new List<string>();          // contents are emptied, the folder itself is kept
+        public readonly List<string> EmptyDirs = new List<string>();     // deleted only if already empty, contents never touched
         public readonly List<string[]> Patterns = new List<string[]>();  // { folder, pattern }, top level only
         public Func<IEnumerable<string>> FileSource;  // files found by custom logic (e.g. older Sweepfella versions)
         public Action<string> AfterDelete;            // called with each file deleted from FileSource
@@ -26,6 +28,12 @@ namespace Sweepfella
         public Category Dir(string path)
         {
             if (!string.IsNullOrEmpty(path)) Dirs.Add(path);
+            return this;
+        }
+
+        public Category IfEmpty(string path)
+        {
+            if (!string.IsNullOrEmpty(path)) EmptyDirs.Add(path);
             return this;
         }
 
@@ -116,17 +124,30 @@ namespace Sweepfella
              .Dir(Env.Combine(local, "AMD", "DxcCache"))
              .Dir(Env.Combine(local, "AMD", "VkCache"))
              .Dir(Env.Combine(local, "AMD", "GLCache"))
-             .Dir(Env.Combine(local, "Intel", "ShaderCache")));
+             .Dir(Env.Combine(local, "Intel", "ShaderCache"))
+             .Dir(Env.Combine(Path.GetPathRoot(win), ".cache", "AMD", "DxcCache")));   // seen written there by AMD's driver
 
             // Driver packages unpack here and never clean up after themselves. The root ACL lets any user
             // modify them, so no admin is needed; the age filter skips an install that's still running.
+            // The vendors' tools recreate these folders when they need them, so empty ones go too.
             string drive = Path.GetPathRoot(win);
             list.Add(new Category
             {
-                Group = system, Name = L.T("cat.driver_installers.name"), UsesAgeFilter = true,
-                Description = L.T("cat.driver_installers.desc", Env.Combine(drive, "AMD"), Env.Combine(drive, "NVIDIA")),
+                Group = system, Name = L.T("cat.driver_installers.name"), UsesAgeFilter = true, RemoveEmptyDirs = true,
+                Description = L.T("cat.driver_installers.desc", Env.Combine(drive, "AMD"), Env.Combine(drive, "NVIDIA"), Env.Combine(drive, "Intel"), Env.Combine(drive, "MSI")),
             }.Dir(Env.Combine(drive, "AMD"))
-             .Dir(Env.Combine(drive, "NVIDIA")));
+             .Dir(Env.Combine(drive, "NVIDIA"))
+             .Dir(Env.Combine(drive, "Intel"))
+             .IfEmpty(Env.Combine(drive, "MSI")));
+
+            // Known Windows SDK installer bug: the 32-bit Application Verifier DLLs meant for SysWOW64 land in
+            // the drive root. They carry a High integrity label, so deleting them needs admin.
+            list.Add(new Category
+            {
+                Group = system, Name = L.T("cat.sdk_strays.name"), DefaultChecked = true, RequiresAdmin = true,
+                Description = L.T("cat.sdk_strays.desc", drive),
+            }.Files(drive, "appverifUI.dll")
+             .Files(drive, "vfcompat.dll"));
 
             AddChromium(list, "Google Chrome", "chrome", Env.Combine(local, "Google", "Chrome", "User Data"));
             AddChromium(list, "Microsoft Edge", "msedge", Env.Combine(local, "Microsoft", "Edge", "User Data"));
@@ -195,8 +216,22 @@ namespace Sweepfella
                 if (!PathGuard.IsSafeToEmpty(dir) || !seen.Add(Env.Normalize(dir))) continue;
                 var info = new DirectoryInfo(dir);
                 if (!info.Exists || Env.IsReparsePoint(info)) continue;
-                WalkDir(info, true, clean, cutoff, r, ct);
+                WalkDir(info, c.RemoveEmptyDirs, clean, cutoff, r, ct);
             }
+
+            if (clean)
+                foreach (var dir in c.EmptyDirs)
+                {
+                    if (!PathGuard.IsSafeToEmpty(dir)) continue;
+                    var info = new DirectoryInfo(dir);
+                    try
+                    {
+                        if (info.Exists && !Env.IsReparsePoint(info) && (cutoff == DateTime.MinValue || Touched(info) <= cutoff))
+                            info.Delete(false);   // fails, harmlessly, unless it's empty
+                    }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                }
 
             foreach (var pattern in c.Patterns)
             {
@@ -228,7 +263,7 @@ namespace Sweepfella
             return info.LastWriteTimeUtc > info.CreationTimeUtc ? info.LastWriteTimeUtc : info.CreationTimeUtc;
         }
 
-        static void WalkDir(DirectoryInfo dir, bool isRoot, bool clean, DateTime cutoff, Result r, CancellationToken ct)
+        static void WalkDir(DirectoryInfo dir, bool deleteIfEmpty, bool clean, DateTime cutoff, Result r, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
             FileSystemInfo[] entries;
@@ -245,11 +280,11 @@ namespace Sweepfella
             {
                 if (Env.IsReparsePoint(entry)) continue;   // never follow symlinks or junctions
                 var sub = entry as DirectoryInfo;
-                if (sub != null) WalkDir(sub, false, clean, cutoff, r, ct);
+                if (sub != null) WalkDir(sub, true, clean, cutoff, r, ct);
                 else HandleFile((FileInfo)entry, clean, cutoff, r);
             }
 
-            if (clean && !isRoot && (cutoff == DateTime.MinValue || touched <= cutoff))
+            if (clean && deleteIfEmpty && (cutoff == DateTime.MinValue || touched <= cutoff))
             {
                 try { dir.Delete(false); }   // only if it ended up empty
                 catch (IOException) { }
