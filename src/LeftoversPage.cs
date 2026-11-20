@@ -122,7 +122,7 @@ namespace Sweepfella
             var sel = Selected;
             var checkedItems = Checked.ToList();
             remove.Text = checkedItems.Count > 0
-                ? L.T("leftovers.remove_count", checkedItems.Count, Bytes.Format(checkedItems.Sum(l => l.Bytes)))
+                ? L.T("leftovers.remove_count", checkedItems.Count, Bytes.Format(checkedItems.Sum(l => l.RemovableBytes)))
                 : L.T("leftovers.remove");
             bool any = Targets.Any();
             open.Enabled = !busy && sel != null;
@@ -181,14 +181,16 @@ namespace Sweepfella
                 var item = new ListViewItem(l.Name, g) { Tag = l, UseItemStyleForSubItems = false, ToolTipText = l.Path };
                 item.SubItems[0].Tag = l.Name;
                 Ui.AddSub(item, l.Location, l.Location);
-                Ui.AddSub(item, Bytes.Format(l.Bytes), l.Bytes);
-                Ui.AddSub(item, l.Files.ToString("N0"), (long)l.Files);
+                // A folder partly in use shows what Remove would actually delete, not the folder's full size.
+                Ui.AddSub(item, Bytes.Format(l.RemovableBytes), l.RemovableBytes);
+                Ui.AddSub(item, l.RemovableFiles.ToString("N0"), (long)l.RemovableFiles);
                 Ui.AddSub(item, Ui.Ago(l.LastChange), l.LastChange);
-                string note = l.RequiresAdmin && !isAdmin ? L.T("leftovers.note.admin")
+                string note = l.PartlyInUse ? L.T("leftovers.note.partly", KeptOwners(l))
+                            : l.RequiresAdmin && !isAdmin ? L.T("leftovers.note.admin")
                             : l.RecentlyUsed ? L.T("leftovers.note.recent")
                             : l.Files == 0 ? L.T("leftovers.note.empty") : "";
                 var sub = Ui.AddSub(item, note, note);
-                if (l.RecentlyUsed) sub.ForeColor = Warning;
+                if (l.PartlyInUse || l.RecentlyUsed) sub.ForeColor = Warning;
                 list.Items.Add(item);
             }
             if (showInUse.Checked)
@@ -214,6 +216,11 @@ namespace Sweepfella
             Ui.FillColumn(list, 0);
             UpdateSelection();
             ShowDetails();
+        }
+
+        static string KeptOwners(Leftover l)
+        {
+            return string.Join(", ", l.Parts.Where(p => p.InUse).Select(p => p.Owner.Owner).Distinct());
         }
 
         Leftover Selected
@@ -255,6 +262,14 @@ namespace Sweepfella
             RichText.Append(details, summary + "\n\n", null, Theme.Subtle);
             if (l.InUse)
                 RichText.Section(details, L.T("leftovers.clue.owner"), L.T("leftovers.clue.owner_body", l.Owner.Describe(), l.Owner.Owner), Warning);
+            if (l.PartlyInUse)
+            {
+                RichText.Section(details, L.T("leftovers.clue.partly"), L.T("leftovers.clue.partly_body"), Warning);
+                RichText.Section(details, L.T("leftovers.clue.partly_removed", Bytes.Format(l.RemovableBytes)),
+                    string.Join("\n", l.Removable.Select(p => "•  " + p.Name + "   " + Bytes.Format(p.Bytes) + " · " + Ui.Ago(p.LastChange))), null);
+                RichText.Section(details, L.T("leftovers.clue.partly_kept"),
+                    string.Join("\n", l.Parts.Where(p => p.InUse).Select(p => "•  " + p.Name + "   " + Bytes.Format(p.Bytes) + " — " + p.Owner.Describe())), Theme.Subtle);
+            }
             if (c == null)
             {
                 RichText.Append(details, L.T("leftovers.details.looking"), null, Theme.Subtle);
@@ -324,7 +339,10 @@ namespace Sweepfella
         {
             var items = Targets.ToList();
             if (items.Count == 0) return;
-            var leftovers = items.Select(i => (Leftover)i.Tag).ToList();
+            var chosen = items.Select(i => (Leftover)i.Tag).ToList();
+            // A folder partly in use only loses the parts nothing uses; those are what's listed and removed.
+            var leftovers = chosen.SelectMany(l => l.Removable).ToList();
+            var kept = chosen.Where(l => l.PartlyInUse).SelectMany(l => l.Parts.Where(p => p.InUse)).ToList();
 
             // Folders the Recycle Bin can't keep (too big, or no bin on their drive) are deleted for good: say so up front.
             var fates = leftovers.ToDictionary(l => l, l => RecycleBin.Predict(l.Path, l.Bytes));
@@ -342,6 +360,11 @@ namespace Sweepfella
                 sb.Append(L.T("leftovers.confirm.permanent_header")).Append("\n\n");
                 AppendPaths(sb, permanent, l => L.T(fates[l] == RecycleFate.TooBig ? "leftovers.confirm.too_big" : "leftovers.confirm.no_bin"));
             }
+            if (kept.Count > 0)
+            {
+                sb.Append('\n').Append(L.T("leftovers.confirm.kept")).Append("\n\n");
+                foreach (var p in kept.Take(15)) sb.Append("•  ").Append(p.Path).Append("  (").Append(p.Owner.Owner).Append(")\n");
+            }
             if (leftovers.Any(l => l.RecentlyUsed)) sb.Append('\n').Append(L.T("leftovers.confirm.recent")).Append('\n');
             sb.Append('\n').Append(L.T(permanent.Count == 0 ? "leftovers.confirm.footer"
                                       : recycled.Count == 0 ? "leftovers.confirm.footer_permanent" : "leftovers.confirm.footer_mixed"));
@@ -358,26 +381,38 @@ namespace Sweepfella
             var errors = new List<string>();
             foreach (var item in items)
             {
-                var l = (Leftover)item.Tag;
-                bool permanently = fates[l] != RecycleFate.Recycled;
-                status.Text = L.T(permanently ? "leftovers.deleting" : "leftovers.moving", l.Name);
-                string error = await Task.Run(() =>
+                var folder = (Leftover)item.Tag;
+                bool allGone = true;
+                foreach (var l in folder.Removable)
                 {
-                    try { LeftoverFinder.Remove(l.Path, permanently, owner); return null; }
-                    catch (OperationCanceledException) { return L.T("leftovers.err.cancelled"); }
-                    catch (IOException ex) { return ex.Message; }
-                    catch (UnauthorizedAccessException) { return L.T("leftovers.err.denied") + (isAdmin ? "" : " " + L.T("leftovers.err.try_admin")); }
-                    catch (InvalidOperationException ex) { return ex.Message; }
-                });
-                if (IsDisposed) return;
-                if (error == null && !Directory.Exists(l.Path))
+                    bool permanently = fates[l] != RecycleFate.Recycled;
+                    status.Text = L.T(permanently ? "leftovers.deleting" : "leftovers.moving", l.Name);
+                    string error = await Task.Run(() =>
+                    {
+                        try { LeftoverFinder.Remove(l.Path, permanently, owner); return null; }
+                        catch (OperationCanceledException) { return L.T("leftovers.err.cancelled"); }
+                        catch (IOException ex) { return ex.Message; }
+                        catch (UnauthorizedAccessException) { return L.T("leftovers.err.denied") + (isAdmin ? "" : " " + L.T("leftovers.err.try_admin")); }
+                        catch (InvalidOperationException ex) { return ex.Message; }
+                    });
+                    if (IsDisposed) return;
+                    if (error == null && !Directory.Exists(l.Path) && !File.Exists(l.Path))
+                    {
+                        if (permanently) { deleted++; deletedBytes += l.Bytes; }
+                        else { moved++; movedBytes += l.Bytes; }
+                    }
+                    else
+                    {
+                        allGone = false;
+                        errors.Add(l.Name + ": " + (error ?? L.T("leftovers.err.not_moved")));
+                    }
+                }
+                // Done with it: gone, or only the parts in use are left (a later search lists it as in use).
+                if (allGone)
                 {
-                    if (permanently) { deleted++; deletedBytes += l.Bytes; }
-                    else { moved++; movedBytes += l.Bytes; }
-                    found.Remove(l);
+                    found.Remove(folder);
                     list.Items.Remove(item);
                 }
-                else errors.Add(l.Name + ": " + (error ?? L.T("leftovers.err.not_moved")));
             }
             SetBusy(false, false);
             var summary = new List<string>();

@@ -21,8 +21,16 @@ namespace Sweepfella
         public DateTime LastChange;
         public Ownership Owner;      // null for leftovers; who uses it otherwise
         public bool SteamOrphan;     // a folder in a Steam library whose game is no longer installed
+        public List<Leftover> Parts; // what's inside, when some of it belongs to something installed (else null)
 
         public bool InUse { get { return Owner != null; } }
+        /// <summary>A leftover holding a folder that's still in use (miHoYo\Genshin Impact next to an uninstalled game).</summary>
+        public bool PartlyInUse { get { return Parts != null && Parts.Any(p => p.InUse); } }
+
+        /// <summary>What removing this leftover deletes: the folder itself, or only its parts nothing uses.</summary>
+        public List<Leftover> Removable { get { return PartlyInUse ? Parts.Where(p => !p.InUse).ToList() : new List<Leftover> { this }; } }
+        public long RemovableBytes { get { return PartlyInUse ? Parts.Where(p => !p.InUse).Sum(p => Math.Max(0, p.Bytes)) : Bytes; } }
+        public int RemovableFiles { get { return PartlyInUse ? Parts.Where(p => !p.InUse).Sum(p => p.Files) : Files; } }
         public bool RecentlyUsed { get { return (DateTime.Now - LastChange).TotalDays < 30; } }
     }
 
@@ -131,11 +139,65 @@ namespace Sweepfella
                         if (progress != null) progress.Report(dir);
                         item.Bytes = 0;
                         Measure(info, item, ct);
+                        CheckParts(item, evidence, ct);
                     }
                     result.Add(item);
                 }
             }
             return result;
+        }
+
+        /// <summary>
+        /// Looks for folders inside a leftover that belong to something installed. If some do, the leftover keeps
+        /// its parts so only the others can be removed; if everything in it does, the whole folder is in use.
+        /// </summary>
+        static void CheckParts(Leftover item, Evidence evidence, CancellationToken ct)
+        {
+            var owners = new Dictionary<string, Ownership>(StringComparer.OrdinalIgnoreCase);
+            foreach (var sub in Env.SubDirs(item.Path))
+            {
+                var owner = evidence.OwnerOfPart(sub);
+                if (owner != null) owners[sub] = owner;
+            }
+            if (owners.Count == 0) return;
+            item.Parts = ListParts(item, owners, ct);
+            if (item.Parts.All(p => p.InUse))
+            {
+                item.Owner = item.Parts.First().Owner;
+                item.Parts = null;
+            }
+        }
+
+        /// <summary>
+        /// The top-level files and folders inside a leftover, measured, largest first. owners names the ones that
+        /// belong to something installed (null when none do).
+        /// </summary>
+        public static List<Leftover> ListParts(Leftover parent, IDictionary<string, Ownership> owners, CancellationToken ct)
+        {
+            var parts = new List<Leftover>();
+            FileSystemInfo[] entries;
+            try { entries = new DirectoryInfo(parent.Path).GetFileSystemInfos(); }
+            catch (IOException) { return parts; }
+            catch (UnauthorizedAccessException) { return parts; }
+            foreach (var e in entries)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (Env.IsReparsePoint(e)) continue;
+                var part = new Leftover { Path = e.FullName, Name = e.Name, Location = parent.Location, RequiresAdmin = parent.RequiresAdmin, Bytes = 0 };
+                try { part.LastChange = e.LastWriteTime; }
+                catch (IOException) { }
+                Ownership owner;
+                if (owners != null && owners.TryGetValue(e.FullName, out owner)) part.Owner = owner;
+                var dir = e as DirectoryInfo;
+                if (dir != null) Measure(dir, part, ct);
+                else
+                {
+                    try { part.Bytes = ((FileInfo)e).Length; part.Files = 1; }
+                    catch (IOException) { }
+                }
+                parts.Add(part);
+            }
+            return parts.OrderByDescending(p => p.Bytes).ThenBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
         }
 
         static bool ContainsAnyFile(DirectoryInfo dir)
@@ -389,6 +451,28 @@ namespace Sweepfella
             ev.paths.RemoveAll(kv => coversScanRoot(kv.Key));
             ev.CollectExecutables(programs, coversScanRoot);
             return ev;
+        }
+
+        /// <summary>
+        /// Who accounts for a folder inside a leftover. Stricter than OwnerOf: generic names in there ("Data", "Cache")
+        /// would match half the installed programs, so only paths, executables and (nearly) exact program names count.
+        /// </summary>
+        public Ownership OwnerOfPart(string dir)
+        {
+            string full = Env.Normalize(dir);
+            foreach (var kv in paths)
+                if (kv.Key.Equals(full, StringComparison.OrdinalIgnoreCase) || kv.Key.StartsWith(full + "\\", StringComparison.OrdinalIgnoreCase))
+                    return kv.Value;
+            string n = LeftoverFinder.Normalize(Path.GetFileName(full));
+            if (n.Length < 4) return null;
+            Ownership owner;
+            if (executables.TryGetValue(n, out owner)) return owner;
+            if (names.TryGetValue(n, out owner) && owner.Kind == OwnerKind.Name) return owner;
+            // "Genshin Impact" ↔ "Genshin Impact Cloud": one name starting with the other, both long enough to mean it.
+            foreach (var kv in names)
+                if (kv.Value.Kind == OwnerKind.Name && kv.Key.Length >= 6 && n.Length >= 6 && (kv.Key.StartsWith(n) || n.StartsWith(kv.Key)))
+                    return kv.Value;
+            return null;
         }
 
         /// <summary>Who accounts for the folder, or null if nothing does (a leftover).</summary>

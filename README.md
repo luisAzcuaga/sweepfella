@@ -28,7 +28,10 @@ An uninstaller that explains what each entry is. For Visual C++ and .NET runtime
 **Leftovers**
 Finds folders in AppData (Roaming, Local, LocalLow), ProgramData, Program Files and your Steam libraries that no
 installed program, service, running process, shortcut or driver accounts for — what uninstallers leave behind,
-including the mods and shader caches of games you've uninstalled from Steam. Nothing is pre-selected, recently
+including the mods and shader caches of games you've uninstalled from Steam. Folders shared by several programs are
+checked one level down: in `LocalLow\miHoYo`, `Genshin Impact` belongs to the installed game and is kept, while
+`ZenlessZoneZero` is offered for removal; the details pane and the confirmation list exactly what goes and what stays.
+Nothing is pre-selected, recently
 modified folders are flagged, and deleted folders go to the Recycle Bin. A folder the Recycle Bin can't hold (bigger than
 its maximum size, or on a drive without one) is listed apart in the confirmation as a permanent deletion, instead of
 Windows silently destroying it. Folders you mark as ignored never show up again.

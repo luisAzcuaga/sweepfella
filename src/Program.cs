@@ -116,7 +116,12 @@ namespace Sweepfella
             var found = LeftoverFinder.Find(LeftoverFinder.LoadIgnored(), null, CancellationToken.None);
             var leftovers = found.Where(l => !l.InUse).ToList();
             foreach (var l in leftovers.OrderByDescending(l => l.Bytes))
+            {
                 Console.WriteLine("{0,10}  {1,-16} {2}", Bytes.Format(l.Bytes), Ui.Ago(l.LastChange), l.Path);
+                if (l.PartlyInUse)
+                    foreach (var p in l.Parts)
+                        Console.WriteLine("{0,10}  {1,-16}   {2}{3}", Bytes.Format(p.Bytes), Ui.Ago(p.LastChange), p.Name, p.InUse ? "  <- " + p.Owner.Describe() : "");
+            }
             Console.WriteLine(L.T("cli.leftovers_total", leftovers.Count, Bytes.Format(leftovers.Sum(l => l.Bytes))));
             if (!includeInUse) return;
             Console.WriteLine();
