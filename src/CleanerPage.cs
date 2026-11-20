@@ -185,7 +185,7 @@ namespace Sweepfella
             n.Expanded = false;
             n.Item.ImageIndex = TreeListView.Collapsed;
             RemoveChildren(n);
-            if (!busy && !Locked(n.Category)) n.Item.SubItems[ColState].Text = SelectionText(n);
+            if (!busy) n.Item.SubItems[ColState].Text = RowState(n);
         }
 
         void RemoveChildren(Node n)
@@ -258,12 +258,35 @@ namespace Sweepfella
             UpdateMark(n);
             if (busy) return;   // a run in progress fills the columns itself
             ShowTotals(n);
-            n.Item.SubItems[ColState].Text = entries.Count == 0 ? L.T("cleaner.state.nothing") : SelectionText(n);
+            n.Item.SubItems[ColState].Text = RowState(n);
         }
 
         static string Where(Entry e)
         {
             return e.Deleted.HasValue ? L.T("cleaner.entry.deleted_from", e.Location, Ui.Ago(e.Deleted.Value)) : e.Location;
+        }
+
+        /// <summary>A category's Status once it has been measured: whether it can be cleaned, and how much of it is selected.</summary>
+        string RowState(Node n)
+        {
+            if (Locked(n.Category)) return L.T("common.requires_admin");
+            Result r;
+            string selection = SelectionText(n);
+            if (!lastScan.TryGetValue(n.Category, out r)) return selection;
+            if (r.Files == 0) return L.T("cleaner.state.nothing");
+            if (!n.Item.Checked) return "";
+            string state = L.T("cleaner.state.can_clean");
+            return selection.Length > 0 ? state + " · " + selection : state;
+        }
+
+        /// <summary>After checking or unchecking, keeps the "can be freed" line in step, once everything checked was measured.</summary>
+        void UpdateTotal()
+        {
+            if (busy) return;
+            var picked = CheckedNodes();
+            if (picked.Count == 0 || !picked.All(n => lastScan.ContainsKey(n.Category))) return;
+            long total = picked.Sum(n => lastScan[n.Category].Bytes);
+            status.Text = total == 0 ? L.T("cleaner.status.nothing") : L.T("cleaner.status.can_free", Bytes.Format(total));
         }
 
         string SelectionText(Node n)
@@ -323,9 +346,10 @@ namespace Sweepfella
                 }
                 UpdateMark(node);
                 ShowTotals(node);
-                if (!busy) node.Item.SubItems[ColState].Text = SelectionText(node);
+                if (!busy) node.Item.SubItems[ColState].Text = RowState(node);
             }
             finally { syncing = false; }
+            UpdateTotal();
         }
 
         /// <summary>A click or Space on a checkbox. A mixed category becomes fully selected, like Windows' own tree checkboxes.</summary>
@@ -345,9 +369,10 @@ namespace Sweepfella
                 foreach (var c in node.Children) c.Checked = true;
                 UpdateMark(node);
                 ShowTotals(node);
-                node.Item.SubItems[ColState].Text = SelectionText(node);
+                node.Item.SubItems[ColState].Text = RowState(node);
             }
             finally { syncing = false; }
+            UpdateTotal();
         }
 
         /// <summary>
@@ -356,11 +381,7 @@ namespace Sweepfella
         /// </summary>
         void ShowTotals(Node n)
         {
-            if (n.Entries == null)
-            {
-                lastScan.Remove(n.Category);
-                return;
-            }
+            if (n.Entries == null) return;   // never listed: no partial selection, so Analyze's numbers still hold
             var only = n.Item.Checked ? n.Selection() : null;
             var picked = only == null ? n.Entries : n.Entries.Where(e => only.Contains(e.Path)).ToList();
             var r = new Result { Files = picked.Sum(e => e.Files), Bytes = picked.Sum(e => e.Bytes) };
@@ -406,9 +427,8 @@ namespace Sweepfella
 
         async void OnAnalyze(object sender, EventArgs e)
         {
-            var picked = CheckedNodes();
-            if (picked.Count == 0) { status.Text = L.T("cleaner.check_one"); return; }
-            await RunAsync(picked, false);
+            // Every category gets measured, checked or not (it's quick); the total only counts the checked ones.
+            await RunAsync(nodes.Where(n => !Locked(n.Category)).ToList(), false);
         }
 
         async void OnClean(object sender, EventArgs e)
@@ -512,20 +532,15 @@ namespace Sweepfella
                 if (doClean && (n.Expanded || only != null)) await ReloadAsync(n);
                 item.SubItems[ColFiles].Text = remaining.Files.ToString("N0");
                 item.SubItems[ColSize].Text = Bytes.Format(remaining.Bytes);
+                lastScan[cat] = remaining;
                 if (doClean)
                 {
                     item.SubItems[ColState].Text = L.T("cleaner.state.freed", Bytes.Format(r.Bytes))
                         + (remaining.Files > 0 ? " · " + L.T("cleaner.state.in_use", remaining.Files) : "");
                 }
-                else
-                {
-                    string state = L.T(r.Files == 0 ? "cleaner.state.nothing" : "cleaner.state.can_clean");
-                    string selection = SelectionText(n);
-                    item.SubItems[ColState].Text = selection.Length > 0 ? state + " · " + selection : state;
-                }
-                lastScan[cat] = remaining;
+                else item.SubItems[ColState].Text = RowState(n);
                 if (doClean) Stats.Add(r.Bytes);
-                total += r.Bytes;
+                if (doClean || item.Checked) total += r.Bytes;
                 failed += r.Failed;
                 progress.Value++;
             }
