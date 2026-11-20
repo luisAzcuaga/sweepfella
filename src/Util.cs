@@ -281,6 +281,115 @@ namespace Sweepfella
             if (result != 0) throw new IOException(L.T("common.shell_error", result.ToString("X")));
         }
 
+        /// <summary>An item in the current user's Recycle Bin.</summary>
+        public sealed class Item
+        {
+            public string IndexPath;     // $I file: original path, size and deletion time
+            public string DataPath;      // $R file or folder: the deleted item itself
+            public string OriginalPath;
+            public long Size;
+            public DateTime Deleted;
+
+            public Entry ToEntry()
+            {
+                return new Entry
+                {
+                    Path = DataPath, Name = Path.GetFileName(OriginalPath), Location = Path.GetDirectoryName(OriginalPath),
+                    Deleted = Deleted, Bytes = Size, Files = 1,
+                };
+            }
+        }
+
+        /// <summary>
+        /// Lists the current user's Recycle Bin items on every local drive by reading the $I index files that
+        /// Windows keeps in X:\$Recycle.Bin\&lt;SID&gt;. Each $Ixxxxxx pairs with a $Rxxxxxx holding the item.
+        /// </summary>
+        public static List<Item> Items()
+        {
+            var items = new List<Item>();
+            var user = WindowsIdentity.GetCurrent().User;
+            if (user == null) return items;
+            foreach (var drive in DriveInfo.GetDrives())
+            {
+                try
+                {
+                    if (!drive.IsReady || (drive.DriveType != DriveType.Fixed && drive.DriveType != DriveType.Removable)) continue;
+                    var bin = new DirectoryInfo(Path.Combine(drive.RootDirectory.FullName, "$Recycle.Bin", user.Value));
+                    if (!bin.Exists) continue;
+                    foreach (var index in bin.GetFiles("$I*"))
+                    {
+                        var item = ReadIndex(index);
+                        if (item != null) items.Add(item);
+                    }
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+            return items;
+        }
+
+        /// <summary>Parses a $I file: version 1 (Vista to 8.1) has a fixed 260-character path, version 2 (Windows 10+) a counted one.</summary>
+        static Item ReadIndex(FileInfo index)
+        {
+            byte[] b;
+            try { b = File.ReadAllBytes(index.FullName); }
+            catch (IOException) { return null; }
+            catch (UnauthorizedAccessException) { return null; }
+            if (b.Length < 24) return null;
+            long version = BitConverter.ToInt64(b, 0);
+            string original;
+            if (version == 1 && b.Length >= 24 + 520) original = System.Text.Encoding.Unicode.GetString(b, 24, 520);
+            else if (version == 2 && b.Length >= 28)
+            {
+                int chars = BitConverter.ToInt32(b, 24);
+                if (chars <= 0 || 28 + chars * 2L > b.Length) return null;
+                original = System.Text.Encoding.Unicode.GetString(b, 28, chars * 2);
+            }
+            else return null;
+            original = original.TrimEnd('\0');
+            int nul = original.IndexOf('\0');
+            if (nul >= 0) original = original.Substring(0, nul);
+
+            string data = Path.Combine(index.DirectoryName, "$R" + index.Name.Substring(2));
+            if (!File.Exists(data) && !Directory.Exists(data)) return null;   // orphaned index; Explorer doesn't show it either
+            DateTime deleted;
+            try { deleted = DateTime.FromFileTime(BitConverter.ToInt64(b, 16)); }
+            catch (ArgumentOutOfRangeException) { deleted = index.LastWriteTime; }
+            return new Item { IndexPath = index.FullName, DataPath = data, OriginalPath = original, Size = BitConverter.ToInt64(b, 8), Deleted = deleted };
+        }
+
+        /// <summary>Deletes one item for good: its data first, then its index so it disappears from the bin. True if it's gone.</summary>
+        public static bool Destroy(Item item)
+        {
+            try
+            {
+                FileSystemInfo data = Directory.Exists(item.DataPath) ? (FileSystemInfo)new DirectoryInfo(item.DataPath) : new FileInfo(item.DataPath);
+                if (data.Exists && (Env.IsReparsePoint(data) ? !DeleteLink(data) : !Cleaner.DeleteTree(data))) return false;
+                File.Delete(item.IndexPath);
+                return true;
+            }
+            catch (IOException) { return false; }
+            catch (UnauthorizedAccessException) { return false; }
+        }
+
+        static bool DeleteLink(FileSystemInfo link)
+        {
+            var dir = link as DirectoryInfo;
+            if (dir != null) Directory.Delete(dir.FullName, false);   // removes the link itself, never what it points to
+            else File.Delete(link.FullName);
+            return true;
+        }
+
+        /// <summary>Lets Explorer redraw the Recycle Bin icon (full/empty) after items were deleted directly.</summary>
+        public static void RefreshIcon()
+        {
+            try { SHUpdateRecycleBinIcon(); }
+            catch (EntryPointNotFoundException) { }
+        }
+
+        [DllImport("shell32.dll")]
+        static extern void SHUpdateRecycleBinIcon();
+
         const uint FO_DELETE = 3;
         const ushort FOF_NOCONFIRMATION = 0x10, FOF_ALLOWUNDO = 0x40, FOF_WANTNUKEWARNING = 0x4000;
         const int ERROR_ACCESS_DENIED = 5, DE_ACCESSDENIEDSRC = 0x78, ERROR_CANCELLED = 1223;
@@ -352,7 +461,7 @@ namespace Sweepfella
         }
     }
 
-    sealed class BufferedListView : ListView
+    class BufferedListView : ListView
     {
         public BufferedListView()
         {

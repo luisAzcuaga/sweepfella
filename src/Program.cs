@@ -18,6 +18,7 @@ namespace Sweepfella
             switch (mode)
             {
                 case "--analyze": return Report(Analyze);
+                case "--details": return Report(Details);
                 case "--programs": return Report(ListPrograms);
                 case "--leftovers": return Report(() => ListLeftovers(args.Contains("--all")));
                 case "--check-updates":
@@ -62,7 +63,21 @@ namespace Sweepfella
             Console.WriteLine(L.T("cli.total", Bytes.Format(total)));
         }
 
-        static void ListPrograms()
+        static void Details()
+        {
+            bool admin = Elevation.IsAdmin();
+            DateTime cutoff = DateTime.UtcNow.AddHours(-24);
+            foreach (var c in Catalog.Build())
+            {
+                var entries = Cleaner.List(c, cutoff, CancellationToken.None);
+                Console.WriteLine("== {0} ({1}){2}", c.Name, entries.Count, c.RequiresAdmin && !admin ? " " + L.T("cli.requires_admin") : "");
+                foreach (var e in entries)
+                    Console.WriteLine("  {0,10} {1,7:N0}  {2}{3}", Bytes.Format(e.Bytes), e.Files,
+                                      Path.Combine(e.Location ?? "", e.Name), e.Deleted.HasValue ? "  (" + Ui.Ago(e.Deleted.Value) + ")" : "");
+            }
+        }
+
+                static void ListPrograms()
         {
             var programs = ProgramRegistry.Read();
             var scanner = new UsageScanner(programs);

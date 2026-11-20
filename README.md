@@ -8,8 +8,11 @@ One ~200 KB executable, no installer, no runtime to download: it runs on the .NE
 **Cleanup**
 Temporary files, Recycle Bin, error reports and crash dumps, thumbnail cache, DirectX/GPU shader cache and browser caches
 (Chrome, Edge, Brave, Vivaldi, Opera, Firefox — cache only: history, cookies and passwords are never touched).
-It also finds copies of older Sweepfella versions (and their zips) in Downloads, Desktop and Documents.
-Analyze first, confirm, then clean. Temporary files from the last 24 hours are kept by default so running installers don't break.
+It also finds copies of older Sweepfella versions (and their zips) in Downloads, Desktop and Documents, files that
+AMD, NVIDIA and Intel driver installers leave in `C:\AMD`, `C:\NVIDIA` and `C:\Intel`, and the Application Verifier DLLs
+the Windows SDK installer drops in the drive root by mistake.
+Expand any category with its arrow to see exactly what it would delete (each Recycle Bin item, each file or folder) and
+uncheck what you want to keep. Analyze first, confirm, then clean. Temporary files from the last 24 hours are kept by default so running installers don't break.
 Freed space is counted towards a lifetime total; for uninstalls it's measured as the free space each drive actually
 gained, so it reflects the real size rather than the size the program claims.
 
@@ -80,6 +83,7 @@ Read-only reports (they never delete anything):
 
 ```sh
 Sweepfella-console.exe --analyze     # what the Cleanup tab would free
+Sweepfella-console.exe --details     # the same, item by item
 Sweepfella-console.exe --programs    # installed programs, runtime status and dependencies
 Sweepfella-console.exe --leftovers   # leftover folders
 Sweepfella-console.exe --inspect <folder>   # clues about who owns a folder

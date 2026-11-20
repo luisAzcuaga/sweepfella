@@ -197,41 +197,111 @@ namespace Sweepfella
         }
     }
 
+    /// <summary>One thing a category would delete: a top-level file or folder, or a Recycle Bin item.</summary>
+    public sealed class Entry
+    {
+        public string Path;        // what Run's only set refers to
+        public string Name;
+        public string Location;    // containing folder (for the Recycle Bin, where it was deleted from)
+        public DateTime? Deleted;  // Recycle Bin items only
+        public long Bytes;
+        public int Files;
+    }
+
     public static class Cleaner
     {
         /// <summary>Analyzes (clean = false) or deletes (clean = true) a category's files.</summary>
         public static Result Run(Category c, bool clean, DateTime cutoffUtc, CancellationToken ct)
         {
+            return Run(c, clean, cutoffUtc, null, ct);
+        }
+
+        /// <summary>
+        /// Same, but when only is given, handles just the entries whose Path is in it (as listed by List), so
+        /// files that appeared after the user picked what to delete are left alone.
+        /// </summary>
+        public static Result Run(Category c, bool clean, DateTime cutoffUtc, ICollection<string> only, CancellationToken ct)
+        {
             var r = new Result();
             if (c.IsRecycleBin)
             {
-                Shell.RunSta(() => RecycleBin(clean, r));
+                if (only == null) Shell.RunSta(() => EmptyRecycleBin(clean, r));
+                else RecycleBinItems(clean, only, r, ct);
                 return r;
             }
+            Visit(c, clean, cutoffUtc, only, ct, (e, part) =>
+            {
+                r.Files += part.Files;
+                r.Bytes += part.Bytes;
+                r.Failed += part.Failed;
+            });
+            return r;
+        }
 
+        /// <summary>What Run would delete, one entry per top-level file or folder, largest first.</summary>
+        public static List<Entry> List(Category c, DateTime cutoffUtc, CancellationToken ct)
+        {
+            var list = new List<Entry>();
+            if (c.IsRecycleBin) list.AddRange(RecycleBin.Items().Select(i => i.ToEntry()));
+            else Visit(c, false, cutoffUtc, null, ct, (e, part) => { if (e != null) list.Add(e); });
+            return list.OrderByDescending(e => e.Bytes).ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        /// <summary>
+        /// Walks every top-level file and folder a category covers, deleting them when clean is set, and reports
+        /// each with what it held. The entry is null for things that wouldn't be listed (nothing to delete there).
+        /// </summary>
+        static void Visit(Category c, bool clean, DateTime cutoffUtc, ICollection<string> only, CancellationToken ct, Action<Entry, Result> report)
+        {
             DateTime cutoff = c.UsesAgeFilter ? cutoffUtc : DateTime.MinValue;
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var dir in c.Dirs)
             {
                 if (!PathGuard.IsSafeToEmpty(dir) || !seen.Add(Env.Normalize(dir))) continue;
-                var info = new DirectoryInfo(dir);
-                if (!info.Exists || Env.IsReparsePoint(info)) continue;
-                WalkDir(info, c.RemoveEmptyDirs, clean, cutoff, r, ct);
+                var root = new DirectoryInfo(dir);
+                if (!root.Exists || Env.IsReparsePoint(root)) continue;
+                DateTime rootTouched;
+                FileSystemInfo[] entries;
+                try
+                {
+                    rootTouched = Touched(root);
+                    entries = root.GetFileSystemInfos();
+                }
+                catch (IOException) { continue; }
+                catch (UnauthorizedAccessException) { continue; }
+
+                foreach (var entry in entries)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (Env.IsReparsePoint(entry) || !Allowed(only, entry.FullName)) continue;   // never follow symlinks or junctions
+                    var part = new Result();
+                    var sub = entry as DirectoryInfo;
+                    bool listed;
+                    if (sub != null)
+                    {
+                        bool emptyAndOld = !clean && IsOld(sub, cutoff) && !HasAnyFile(sub);   // checked first: cleaning would remove it
+                        WalkDir(sub, true, clean, cutoff, part, ct);
+                        listed = part.Files > 0 || emptyAndOld;
+                    }
+                    else listed = HandleFile((FileInfo)entry, clean, cutoff, part) || part.Files > 0;
+                    report(listed ? MakeEntry(entry, root.FullName, part) : null, part);
+                }
+                if (clean && c.RemoveEmptyDirs && (cutoff == DateTime.MinValue || rootTouched <= cutoff)) TryDeleteEmpty(root);
             }
 
-            if (clean)
-                foreach (var dir in c.EmptyDirs)
+            foreach (var dir in c.EmptyDirs)
+            {
+                if (!PathGuard.IsSafeToEmpty(dir) || !Allowed(only, dir)) continue;
+                var info = new DirectoryInfo(dir);
+                try
                 {
-                    if (!PathGuard.IsSafeToEmpty(dir)) continue;
-                    var info = new DirectoryInfo(dir);
-                    try
-                    {
-                        if (info.Exists && !Env.IsReparsePoint(info) && (cutoff == DateTime.MinValue || Touched(info) <= cutoff))
-                            info.Delete(false);   // fails, harmlessly, unless it's empty
-                    }
-                    catch (IOException) { }
-                    catch (UnauthorizedAccessException) { }
+                    if (!info.Exists || Env.IsReparsePoint(info) || !IsOld(info, cutoff)) continue;
+                    if (clean) TryDeleteEmpty(info);   // fails, harmlessly, unless it's empty
+                    else if (!HasAnyEntry(info)) report(MakeEntry(info, info.Parent == null ? "" : info.Parent.FullName, new Result()), new Result());
                 }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
 
             foreach (var pattern in c.Patterns)
             {
@@ -243,7 +313,10 @@ namespace Sweepfella
                 foreach (var f in files)
                 {
                     ct.ThrowIfCancellationRequested();
-                    if (!Env.IsReparsePoint(f)) HandleFile(f, clean, cutoff, r);
+                    if (Env.IsReparsePoint(f) || !Allowed(only, f.FullName)) continue;
+                    var part = new Result();
+                    HandleFile(f, clean, cutoff, part);
+                    report(part.Files > 0 ? MakeEntry(f, pattern[0], part) : null, part);
                 }
             }
 
@@ -252,9 +325,91 @@ namespace Sweepfella
                 {
                     ct.ThrowIfCancellationRequested();
                     var f = new FileInfo(path);
-                    if (f.Exists && HandleFile(f, clean, cutoff, r) && clean && c.AfterDelete != null) c.AfterDelete(path);
+                    if (!f.Exists || !Allowed(only, f.FullName)) continue;
+                    var part = new Result();
+                    if (HandleFile(f, clean, cutoff, part) && clean && c.AfterDelete != null) c.AfterDelete(path);
+                    report(part.Files > 0 ? MakeEntry(f, f.DirectoryName, part) : null, part);
                 }
-            return r;
+        }
+
+        static bool Allowed(ICollection<string> only, string path)
+        {
+            return only == null || only.Contains(path);
+        }
+
+        static Entry MakeEntry(FileSystemInfo info, string location, Result part)
+        {
+            return new Entry { Path = info.FullName, Name = info.Name, Location = location, Bytes = part.Bytes, Files = part.Files };
+        }
+
+        static bool IsOld(FileSystemInfo info, DateTime cutoff)
+        {
+            return cutoff == DateTime.MinValue || Touched(info) <= cutoff;
+        }
+
+        static void TryDeleteEmpty(DirectoryInfo dir)
+        {
+            try { dir.Delete(false); }   // only if it's empty
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+
+        static bool HasAnyEntry(DirectoryInfo dir)
+        {
+            using (var e = dir.EnumerateFileSystemInfos().GetEnumerator()) return e.MoveNext();
+        }
+
+        /// <summary>True if any file lies under dir (empty subfolders don't count; reparse points are left alone).</summary>
+        static bool HasAnyFile(DirectoryInfo dir)
+        {
+            try
+            {
+                foreach (var e in dir.EnumerateFileSystemInfos())
+                {
+                    if (Env.IsReparsePoint(e)) return true;   // can't be deleted by the walk, so the folder stays
+                    var sub = e as DirectoryInfo;
+                    if (sub == null || HasAnyFile(sub)) return true;
+                }
+            }
+            catch (IOException) { return true; }
+            catch (UnauthorizedAccessException) { return true; }
+            return false;
+        }
+
+        /// <summary>Deletes (or counts) the Recycle Bin items in only, one by one.</summary>
+        static void RecycleBinItems(bool clean, ICollection<string> only, Result r, CancellationToken ct)
+        {
+            foreach (var item in RecycleBin.Items())
+            {
+                ct.ThrowIfCancellationRequested();
+                if (!only.Contains(item.DataPath)) continue;
+                if (!clean)
+                {
+                    r.Files++;
+                    r.Bytes += item.Size;
+                }
+                else if (RecycleBin.Destroy(item))
+                {
+                    r.Files++;
+                    r.Bytes += item.Size;
+                }
+                else r.Failed++;
+            }
+            if (clean) RecycleBin.RefreshIcon();
+        }
+
+        /// <summary>Deletes a whole file or folder tree (used for Recycle Bin items). True if nothing is left.</summary>
+        internal static bool DeleteTree(FileSystemInfo info)
+        {
+            var r = new Result();
+            var dir = info as DirectoryInfo;
+            if (dir != null)
+            {
+                WalkDir(dir, true, true, DateTime.MinValue, r, CancellationToken.None);
+                dir.Refresh();
+                return !dir.Exists;
+            }
+            return HandleFile((FileInfo)info, true, DateTime.MinValue, r);
         }
 
         static DateTime Touched(FileSystemInfo info)
@@ -322,7 +477,7 @@ namespace Sweepfella
             return false;
         }
 
-        static void RecycleBin(bool clean, Result r)
+        static void EmptyRecycleBin(bool clean, Result r)
         {
             var info = new Native.SHQUERYRBINFO { cbSize = Marshal.SizeOf(typeof(Native.SHQUERYRBINFO)) };
             if (Native.SHQueryRecycleBin(null, ref info) != 0) return;
