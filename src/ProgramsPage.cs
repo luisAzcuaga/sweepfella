@@ -156,7 +156,7 @@ namespace Sweepfella
                 Ui.AddSub(item, p.InstallDate.HasValue ? p.InstallDate.Value.ToString("d") : "", p.InstallDate ?? DateTime.MinValue);
                 var state = Ui.AddSub(item, p.StatusText, p.StatusText);
                 if (NeedsAttention(p)) state.ForeColor = Warning;
-                if (p.UninstallerMissing) foreach (ListViewItem.ListViewSubItem s in item.SubItems) s.ForeColor = Theme.Subtle;
+                if (p.UninstallerMissing || p.EntryLeftBehind) foreach (ListViewItem.ListViewSubItem s in item.SubItems) s.ForeColor = Theme.Subtle;
                 list.Items.Add(item);
                 if (p == selected) item.Selected = true;
             }
@@ -185,6 +185,7 @@ namespace Sweepfella
             {
                 details.Text = L.T("programs.select_hint");
                 openLocation.Enabled = uninstall.Enabled = false;
+                uninstall.Text = L.T("programs.uninstall");
                 return;
             }
 
@@ -214,8 +215,16 @@ namespace Sweepfella
             Section(L.T("programs.section.registry"), p.RegistryPath, Theme.Subtle, bold);
             details.SelectionStart = 0;
             details.ScrollToCaret();
-            openLocation.Enabled = !busy && p.InstallLocation != null;
-            uninstall.Enabled = !busy && !string.IsNullOrEmpty(p.UninstallString);
+            UpdateButtons();
+        }
+
+        /// <summary>Open location only when the folder exists; for an entry left behind, Uninstall becomes Remove entry.</summary>
+        void UpdateButtons()
+        {
+            var p = Selected;
+            openLocation.Enabled = !busy && p != null && p.LocationExists;
+            uninstall.Text = L.T(p != null && p.EntryLeftBehind ? "programs.remove_entry" : "programs.uninstall");
+            uninstall.Enabled = !busy && p != null && (p.EntryLeftBehind || !string.IsNullOrEmpty(p.UninstallString));
         }
 
         void Section(string heading, string body, Color? color, Font bold)
@@ -273,6 +282,11 @@ namespace Sweepfella
         {
             var p = Selected;
             if (p == null) return;
+            if (p.EntryLeftBehind)
+            {
+                await RemoveEntryAsync(p);
+                return;
+            }
             if (p.UninstallerMissing)
             {
                 MessageBox.Show(this, L.T("programs.uninstall.missing", p.Name), L.T("programs.uninstall.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -340,6 +354,27 @@ namespace Sweepfella
 
         static readonly TimeSpan UninstallWait = TimeSpan.FromMinutes(15);   // uninstallers may wait for the user to click through
 
+        async Task RemoveEntryAsync(InstalledProgram p)
+        {
+            bool machineWide = p.Hive == Microsoft.Win32.RegistryHive.LocalMachine;
+            if (machineWide && !Elevation.IsAdmin())
+            {
+                MessageBox.Show(this, L.T("programs.remove_entry.admin", p.Name), L.T("programs.remove_entry.title"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (MessageBox.Show(this, L.T("programs.remove_entry.ask", p.Name, p.RegistryPath), L.T("programs.remove_entry.title"),
+                                MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
+            try { ProgramRegistry.DeleteEntry(p); }
+            catch (Exception ex)
+            {
+                if (!(ex is UnauthorizedAccessException || ex is System.Security.SecurityException || ex is System.IO.IOException || ex is InvalidOperationException)) throw;
+                status.Text = L.T("programs.remove_entry.failed", ex.Message);
+                return;
+            }
+            await ReloadAsync();
+            status.Text = L.T("programs.remove_entry.done", p.Name);
+        }
+
         void SetBusy(bool value, bool cancellable)
         {
             busy = value;
@@ -347,9 +382,7 @@ namespace Sweepfella
             cancel.Visible = value && cancellable;
             progress.Visible = value;
             progress.MarqueeAnimationSpeed = value ? 30 : 0;
-            var p = Selected;
-            openLocation.Enabled = !value && p != null && p.InstallLocation != null;
-            uninstall.Enabled = !value && p != null && !string.IsNullOrEmpty(p.UninstallString);
+            UpdateButtons();
         }
 
         public void CancelWork()

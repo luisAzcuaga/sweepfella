@@ -429,6 +429,8 @@ namespace Sweepfella
         public static Evidence Collect(List<InstalledProgram> programs, IEnumerable<string> scanRoots)
         {
             var ev = new Evidence();
+            // An entry left behind (folder gone, no uninstaller) is no sign the program is still installed.
+            programs = programs.Where(p => !p.EntryLeftBehind).ToList();
             foreach (var p in programs)
             {
                 ev.AddName(p.Name, new Ownership(p.ShortName, OwnerKind.Name));

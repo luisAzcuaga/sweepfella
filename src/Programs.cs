@@ -14,9 +14,27 @@ namespace Sweepfella
     public sealed class InstalledProgram
     {
         public string Name, Publisher, Version, InstallLocation, UninstallString, DisplayIcon, RegistryKey, RegistryPath;
+        public RegistryHive Hive;
+        public RegistryView View;
         public long SizeBytes;
         public DateTime? InstallDate;
         public bool UninstallerMissing;
+
+        /// <summary>
+        /// Only the entry in Windows' list is left: it has no working uninstaller, and its folder (if it names one) is
+        /// gone. Typical of games removed by Steam whose own installer had registered them too (It Takes Two by EA).
+        /// </summary>
+        public bool EntryLeftBehind
+        {
+            get
+            {
+                bool noUninstaller = UninstallerMissing || string.IsNullOrEmpty(UninstallString);
+                if (!noUninstaller) return false;
+                return InstallLocation != null ? !Directory.Exists(InstallLocation) : UninstallerMissing;
+            }
+        }
+
+        public bool LocationExists { get { return InstallLocation != null && Directory.Exists(InstallLocation); } }
 
         static readonly System.Text.RegularExpressions.Regex TrailingVersion =
             new System.Text.RegularExpressions.Regex(@"[\s\-–]*v?\d+(\.\d+){1,3}\s*$");
@@ -47,6 +65,7 @@ namespace Sweepfella
         {
             get
             {
+                if (EntryLeftBehind) return L.T("status.left_behind");
                 if (UninstallerMissing) return L.T("status.uninstaller_missing");
                 if (SupersededBy != null) return L.T("status.superseded", SupersededBy.Version);
                 if (Runtime == null) return "";
@@ -61,6 +80,8 @@ namespace Sweepfella
         {
             get
             {
+                if (EntryLeftBehind)
+                    return InstallLocation != null ? L.T("advice.left_behind", InstallLocation) : L.T("advice.left_behind_no_folder");
                 if (UninstallerMissing) return L.T("advice.uninstaller_missing");
                 if (SupersededBy != null) return L.T("advice.superseded", SupersededBy.Name);
                 if (Runtime == null) return null;
@@ -166,6 +187,8 @@ namespace Sweepfella
                             DisplayIcon = Str(k, "DisplayIcon"),
                             RegistryKey = keyName,
                             RegistryPath = prefix + "\\" + keyName,
+                            Hive = hive,
+                            View = view,
                             SizeBytes = Math.Max(0, Int(k, "EstimatedSize")) * 1024L,
                             InstallDate = Date(Str(k, "InstallDate")),
                         };
@@ -203,6 +226,28 @@ namespace Sweepfella
             if (s == null) return null;
             s = Environment.ExpandEnvironmentVariables(s.Trim().Trim('"')).TrimEnd('\\');
             return Path.IsPathRooted(s) && s.Length > 3 ? s : null;
+        }
+
+        /// <summary>
+        /// Deletes a program's entry from Windows' list of installed programs, nothing else. Only for entries left
+        /// behind; checks the key still describes the same program first, so a reused key name is never touched.
+        /// </summary>
+        public static void DeleteEntry(InstalledProgram p)
+        {
+            if (!p.EntryLeftBehind || string.IsNullOrEmpty(p.RegistryKey) || p.RegistryKey.Contains("\\"))
+                throw new InvalidOperationException(L.T("programs.remove_entry.not_left_behind", p.Name));
+            using (var baseKey = RegistryKey.OpenBaseKey(p.Hive, p.View))
+            using (var root = baseKey.OpenSubKey(UninstallPath, true))
+            {
+                if (root == null) return;
+                using (var k = root.OpenSubKey(p.RegistryKey))
+                {
+                    if (k == null) return;   // already gone
+                    if (!string.Equals((Str(k, "DisplayName") ?? "").Trim(), p.Name, StringComparison.Ordinal))
+                        throw new InvalidOperationException(L.T("programs.remove_entry.changed", p.Name));
+                }
+                root.DeleteSubKeyTree(p.RegistryKey, false);
+            }
         }
 
         /// <summary>Starts the program's uninstaller. Returns null if it has none.</summary>
