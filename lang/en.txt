@@ -102,6 +102,13 @@ cleaner.status.done_failed = {0:N0} files were in use and were skipped.
 cleaner.status.total = Total so far: {0}.
 cleaner.status.nothing = There's nothing to clean.
 cleaner.status.can_free = {0} can be freed. Press Clean to delete it.
+cleaner.select = Select:
+cleaner.select.all = All
+cleaner.select.none = None
+cleaner.select.recommended = Recommended
+cleaner.state.size_unknown = size known after cleaning
+cleaner.state.size_up_to = frees up to {0}
+cleaner.confirm.restore_points = You won't be able to roll Windows back to the restore points deleted. The newest one, “{0}” from {1}, is kept. Windows only reports their size once they're deleted, so they aren't part of the estimate.
 
 # ---- Cleanup categories ----
 cat.group.system = System
@@ -126,6 +133,11 @@ cat.driver_installers.name = Driver installers (AMD, NVIDIA, Intel)
 cat.driver_installers.desc = Files that AMD, NVIDIA and Intel driver installers unpack to {0}, {1} and {2} and never remove. Every driver update adds another GB or two. The installed driver doesn't need them; to reinstall, just download the installer again. Those folders, and an empty {3}, are removed once nothing is left in them; the vendors' tools recreate them when needed.
 cat.sdk_strays.name = Misplaced Windows SDK files
 cat.sdk_strays.desc = Two Application Verifier files (appverifUI.dll and vfcompat.dll) that the Windows SDK installer drops in the root of {0} by mistake. Windows doesn't use them there. They may come back after a Visual Studio or SDK update.
+cat.restore_points.name = Old restore points
+cat.restore_points.desc = System Restore points except the newest one, which is always kept, and those from the last 24 hours while that option below is checked. Windows creates them before updates and driver or program installs, and together they can take several GB. You won't be able to roll Windows back to the ones deleted. Windows doesn't report a restore point's size: Status shows the most cleaning could free (what all of them use together), and the space actually freed is shown after cleaning.
+cat.restore_points.unnamed = (no description)
+cat.restore_points.created = created {0} · {1}
+cat.restore_points.entry = Restore point “{0}”, created {1} ({2}). Cleaning deletes it: Windows can't be rolled back to it afterwards.
 cat.browser.name = {0} cache
 cat.browser.desc = Copies of web pages, scripts and shaders that {0} keeps to load faster. It doesn't delete history, cookies, passwords or tabs.
 cat.firefox.desc = Copies of web pages and thumbnails that Firefox keeps to load faster. It doesn't delete history, cookies, passwords or tabs.

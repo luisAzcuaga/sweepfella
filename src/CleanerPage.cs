@@ -72,7 +72,11 @@ namespace Sweepfella
         readonly Label status = new Label { AutoSize = true, Anchor = AnchorStyles.Left, Text = L.T("cleaner.status.start") };
         readonly Button analyze, clean, cancel;
         CancellationTokenSource cts;
-        bool busy, populating, syncing;
+        bool busy, populating, syncing, bulk;
+
+        // The categories the user checked or unchecked against the defaults, by Id, kept between sessions.
+        const string SelectionKey = "cleanup.selection";
+        Dictionary<string, bool> savedSelection;
 
         public CleanerPage(bool isAdmin)
         {
@@ -99,6 +103,11 @@ namespace Sweepfella
                 foreach (var n in nodes.Where(n => n.Expanded)) Reload(n);
             };
 
+            var select = new Label { AutoSize = true, Margin = new Padding(0, 0, 2, 4), ForeColor = Theme.Subtle, Text = L.T("cleaner.select") };
+            var selectAll = SelectLink("cleaner.select.all", n => true);
+            var selectNone = SelectLink("cleaner.select.none", n => false);
+            var selectRecommended = SelectLink("cleaner.select.recommended", n => n.Category.DefaultChecked);
+
             analyze = Ui.MakeButton(L.T("cleaner.analyze"), OnAnalyze);
             clean = Ui.MakeButton(L.T("cleaner.clean"), OnClean);
             cancel = Ui.MakeButton(L.T("common.cancel"), OnCancel);
@@ -114,13 +123,15 @@ namespace Sweepfella
 
             var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(8) };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             for (int i = 0; i < 4; i++) root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.Controls.Add(list, 0, 0);
-            root.Controls.Add(description, 0, 1);
-            root.Controls.Add(Ui.Row(keepRecent), 0, 2);
-            root.Controls.Add(progress, 0, 3);
-            root.Controls.Add(bottom, 0, 4);
+            root.Controls.Add(Ui.Row(select, selectAll, selectNone, selectRecommended), 0, 0);
+            root.Controls.Add(list, 0, 1);
+            root.Controls.Add(description, 0, 2);
+            root.Controls.Add(Ui.Row(keepRecent), 0, 3);
+            root.Controls.Add(progress, 0, 4);
+            root.Controls.Add(bottom, 0, 5);
             root.Resize += (s, e) => description.MaximumSize = new Size(Math.Max(100, root.ClientSize.Width - root.Padding.Horizontal - 6), 0);
             Controls.Add(root);
 
@@ -138,6 +149,7 @@ namespace Sweepfella
 
         void Populate()
         {
+            savedSelection = LoadSelection();
             populating = true;
             var groups = new Dictionary<string, ListViewGroup>();
             foreach (var n in nodes)
@@ -154,7 +166,7 @@ namespace Sweepfella
                 n.Item = new ListViewItem(new[] { c.Name, "", "", locked ? L.T("common.requires_admin") : "" }, g)
                 {
                     Tag = n,
-                    Checked = c.DefaultChecked && !locked,
+                    Checked = !locked && WantedAtStart(c),
                     ImageIndex = TreeListView.Collapsed,
                 };
                 if (locked) n.Item.ForeColor = Theme.Subtle;
@@ -164,6 +176,67 @@ namespace Sweepfella
         }
 
         bool Locked(Category c) { return c.RequiresAdmin && !isAdmin; }
+
+        // ---- The last selection, remembered as differences from the defaults (so the defaults write nothing) ----
+
+        static Dictionary<string, bool> LoadSelection()
+        {
+            var saved = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            foreach (var token in Settings.GetList(SelectionKey))
+                if (token.Length > 1 && (token[0] == '+' || token[0] == '-')) saved[token.Substring(1)] = token[0] == '+';
+            return saved;
+        }
+
+        bool WantedAtStart(Category c)
+        {
+            bool on;
+            return savedSelection.TryGetValue(c.Id, out on) ? on : c.DefaultChecked;
+        }
+
+        /// <summary>
+        /// Stores which categories are checked. Categories that can't be changed right now (they need admin) keep
+        /// what was stored, and so do ones not shown this time (a browser that's been uninstalled).
+        /// </summary>
+        void SaveSelection()
+        {
+            foreach (var n in nodes)
+            {
+                if (Locked(n.Category)) continue;
+                if (n.Item.Checked == n.Category.DefaultChecked) savedSelection.Remove(n.Category.Id);
+                else savedSelection[n.Category.Id] = n.Item.Checked;
+            }
+            Settings.SetList(SelectionKey, savedSelection.Select(kv => (kv.Value ? "+" : "-") + kv.Key));   // writes only if it changed
+        }
+
+        /// <summary>Restore points have no size until they're deleted (Windows doesn't report one).</summary>
+        static string SizeText(Category c, long bytes) { return c.IsRestorePoints ? "—" : Bytes.Format(bytes); }
+
+        // ---- Quick selection: all, none, or the categories checked at startup ----
+
+        LinkLabel SelectLink(string key, Func<Node, bool> want)
+        {
+            var link = new LinkLabel { AutoSize = true, Margin = new Padding(6, 0, 6, 4), Text = L.T(key) };
+            link.LinkClicked += (s, e) => SelectWhere(want);
+            return link;
+        }
+
+        /// <summary>Checks exactly the categories want picks, each one whole (partial selections are reset).</summary>
+        void SelectWhere(Func<Node, bool> want)
+        {
+            if (busy) return;
+            bulk = true;
+            try
+            {
+                foreach (var n in nodes)
+                {
+                    bool on = want(n) && !Locked(n.Category);
+                    if (n.Item.Checked != on) n.Item.Checked = on;   // OnItemChecked brings the entries along
+                    else if (on && n.Selection() != null) SelectWhole(n);
+                }
+            }
+            finally { bulk = false; }
+            SaveSelection();
+        }
 
         // ---- Expanding a category into what it would delete ----
 
@@ -229,7 +302,7 @@ namespace Sweepfella
                 RemoveChildren(n);
                 foreach (var e in n.Expanded ? entries : new List<Entry>())
                 {
-                    var item = new ListViewItem(new[] { e.Name, e.Files.ToString("N0"), Bytes.Format(e.Bytes), Where(e) }, n.Item.Group)
+                    var item = new ListViewItem(new[] { e.Name, cat.IsRestorePoints ? "" : e.Files.ToString("N0"), SizeText(cat, e.Bytes), Where(e) }, n.Item.Group)
                     {
                         Tag = new Child { Node = n, Entry = e, Order = n.Children.Count },
                         IndentCount = 1,
@@ -274,9 +347,14 @@ namespace Sweepfella
             string selection = SelectionText(n);
             if (!lastScan.TryGetValue(n.Category, out r)) return selection;
             if (r.Files == 0) return L.T("cleaner.state.nothing");
-            if (!n.Item.Checked) return "";
-            string state = L.T("cleaner.state.can_clean");
-            return selection.Length > 0 ? state + " · " + selection : state;
+            string size = !n.Category.IsRestorePoints ? ""
+                        : n.Category.SizeUpTo > 0 ? L.T("cleaner.state.size_up_to", Bytes.Format(n.Category.SizeUpTo))
+                        : L.T("cleaner.state.size_unknown");
+            var parts = new List<string>();
+            if (n.Item.Checked) parts.Add(L.T("cleaner.state.can_clean"));
+            if (n.Item.Checked && selection.Length > 0) parts.Add(selection);
+            if (size.Length > 0) parts.Add(size);
+            return string.Join(" · ", parts);
         }
 
         /// <summary>After checking or unchecking, keeps the "can be freed" line in step, once everything checked was measured.</summary>
@@ -350,6 +428,7 @@ namespace Sweepfella
             }
             finally { syncing = false; }
             UpdateTotal();
+            if (!bulk) SaveSelection();
         }
 
         /// <summary>A click or Space on a checkbox. A mixed category becomes fully selected, like Windows' own tree checkboxes.</summary>
@@ -362,6 +441,12 @@ namespace Sweepfella
                 return;
             }
             if (busy || Locked(node.Category)) return;
+            SelectWhole(node);
+        }
+
+        /// <summary>Turns a partly selected category into a fully selected one.</summary>
+        void SelectWhole(Node node)
+        {
             syncing = true;
             try
             {
@@ -386,7 +471,7 @@ namespace Sweepfella
             var picked = only == null ? n.Entries : n.Entries.Where(e => only.Contains(e.Path)).ToList();
             var r = new Result { Files = picked.Sum(e => e.Files), Bytes = picked.Sum(e => e.Bytes) };
             n.Item.SubItems[ColFiles].Text = r.Files.ToString("N0");
-            n.Item.SubItems[ColSize].Text = Bytes.Format(r.Bytes);
+            n.Item.SubItems[ColSize].Text = SizeText(n.Category, r.Bytes);
             lastScan[n.Category] = r;
         }
 
@@ -413,9 +498,9 @@ namespace Sweepfella
                 return;
             }
             var entry = EntryOf(item);
-            description.Text = entry.Deleted.HasValue
+            description.Text = entry.Summary ?? (entry.Deleted.HasValue
                 ? L.T("cleaner.entry.recycled", entry.Name, entry.Location, Ui.Ago(entry.Deleted.Value))
-                : Path.Combine(entry.Location ?? "", entry.Name);
+                : Path.Combine(entry.Location ?? "", entry.Name));
         }
 
         // ---- Analyze and clean ----
@@ -460,6 +545,12 @@ namespace Sweepfella
             }
             if (cats.All(lastScan.ContainsKey))
                 sb.Append('\n').Append(L.T("cleaner.confirm.estimate", Bytes.Format(cats.Sum(c => lastScan[c].Bytes)))).Append('\n');
+            if (cats.Any(c => c.IsRestorePoints))
+            {
+                var newest = RestorePoints.Newest();
+                if (newest != null)
+                    sb.Append('\n').Append(L.T("cleaner.confirm.restore_points", newest.Description.Length > 0 ? newest.Description : L.T("cat.restore_points.unnamed"), newest.Created.ToString("g"))).Append('\n');
+            }
 
             var open = cats.Where(c => c.AppName != null && c.Processes.Any(IsRunning)).Select(c => c.AppName).Distinct().ToList();
             if (open.Count > 0)
@@ -531,7 +622,7 @@ namespace Sweepfella
                 }
                 if (doClean && (n.Expanded || only != null)) await ReloadAsync(n);
                 item.SubItems[ColFiles].Text = remaining.Files.ToString("N0");
-                item.SubItems[ColSize].Text = Bytes.Format(remaining.Bytes);
+                item.SubItems[ColSize].Text = SizeText(cat, remaining.Bytes);
                 lastScan[cat] = remaining;
                 if (doClean)
                 {

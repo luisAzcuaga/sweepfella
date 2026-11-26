@@ -23,7 +23,7 @@ for f in lang/*.txt; do sources+=("/resource:$(wslpath -w "$f"),lang.$(basename 
   /out:"$(wslpath -w "$out")" \
   /win32manifest:"$(wslpath -w app.manifest)" \
   /win32icon:"$(wslpath -w sweepfella.ico)" /resource:"$(wslpath -w sweepfella.ico)",sweepfella.ico \
-  /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:Microsoft.VisualBasic.dll \
+  /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll /r:Microsoft.VisualBasic.dll \
   "${sources[@]}" | iconv -f cp850 -t utf-8 | sed 's/^.*\\src\\/src\//'
 
 chmod +x "$out"

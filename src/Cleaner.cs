@@ -9,6 +9,7 @@ namespace Sweepfella
 {
     public sealed class Category
     {
+        public string Id;                      // stable, language-independent (remembers the user's selection)
         public string Group;
         public string Name;
         public string Description;
@@ -18,6 +19,8 @@ namespace Sweepfella
         public bool DefaultChecked;
         public bool UsesAgeFilter;             // honors "keep files from the last 24 hours"
         public bool IsRecycleBin;
+        public bool IsRestorePoints;           // System Restore points but the newest; Windows doesn't report their size
+        public long SizeUpTo = -1;             // restore points: the most cleaning could free (all shadow storage), from the last look
         public bool RemoveEmptyDirs;           // also delete each Dirs folder itself once it ends up empty
         public readonly List<string> Dirs = new List<string>();          // contents are emptied, the folder itself is kept
         public readonly List<string> EmptyDirs = new List<string>();     // deleted only if already empty, contents never touched
@@ -65,25 +68,25 @@ namespace Sweepfella
 
             list.Add(new Category
             {
-                Group = system, Name = L.T("cat.user_temp.name"), DefaultChecked = true, UsesAgeFilter = true,
+                Id = "user_temp", Group = system, Name = L.T("cat.user_temp.name"), DefaultChecked = true, UsesAgeFilter = true,
                 Description = L.T("cat.user_temp.desc"),
             }.Dir(Path.GetTempPath()));
 
             list.Add(new Category
             {
-                Group = system, Name = L.T("cat.win_temp.name"), DefaultChecked = true, UsesAgeFilter = true, RequiresAdmin = true,
+                Id = "win_temp", Group = system, Name = L.T("cat.win_temp.name"), DefaultChecked = true, UsesAgeFilter = true, RequiresAdmin = true,
                 Description = L.T("cat.win_temp.desc"),
             }.Dir(Env.Combine(win, "Temp")));
 
             list.Add(new Category
             {
-                Group = system, Name = L.T("cat.recycle.name"), DefaultChecked = true, IsRecycleBin = true,
+                Id = "recycle", Group = system, Name = L.T("cat.recycle.name"), DefaultChecked = true, IsRecycleBin = true,
                 Description = L.T("cat.recycle.desc"),
             });
 
             list.Add(new Category
             {
-                Group = system, Name = L.T("cat.wer_user.name"), DefaultChecked = true,
+                Id = "wer_user", Group = system, Name = L.T("cat.wer_user.name"), DefaultChecked = true,
                 Description = L.T("cat.wer_user.desc"),
             }.Dir(Env.Combine(local, "Microsoft", "Windows", "WER", "ReportArchive"))
              .Dir(Env.Combine(local, "Microsoft", "Windows", "WER", "ReportQueue"))
@@ -91,7 +94,7 @@ namespace Sweepfella
 
             list.Add(new Category
             {
-                Group = system, Name = L.T("cat.wer_system.name"), DefaultChecked = true, RequiresAdmin = true,
+                Id = "wer_system", Group = system, Name = L.T("cat.wer_system.name"), DefaultChecked = true, RequiresAdmin = true,
                 Description = L.T("cat.wer_system.desc"),
             }.Dir(Env.Combine(data, "Microsoft", "Windows", "WER", "ReportArchive"))
              .Dir(Env.Combine(data, "Microsoft", "Windows", "WER", "ReportQueue"))
@@ -102,20 +105,20 @@ namespace Sweepfella
 
             list.Add(new Category
             {
-                Group = system, Name = L.T("cat.old_versions.name"), DefaultChecked = true,
+                Id = "old_versions", Group = system, Name = L.T("cat.old_versions.name"), DefaultChecked = true,
                 Description = L.T("cat.old_versions.desc"),
                 FileSource = OldVersions.Find, AfterDelete = OldVersions.CleanUpAfter,
             });
 
             list.Add(new Category
             {
-                Group = system, Name = L.T("cat.thumbs.name"),
+                Id = "thumbs", Group = system, Name = L.T("cat.thumbs.name"),
                 Description = L.T("cat.thumbs.desc"),
             }.Files(Env.Combine(local, "Microsoft", "Windows", "Explorer"), "thumbcache_*.db"));
 
             list.Add(new Category
             {
-                Group = system, Name = L.T("cat.shaders.name"),
+                Id = "shaders", Group = system, Name = L.T("cat.shaders.name"),
                 Description = L.T("cat.shaders.desc"),
             }.Dir(Env.Combine(local, "D3DSCache"))
              .Dir(Env.Combine(local, "NVIDIA", "DXCache"))
@@ -133,7 +136,7 @@ namespace Sweepfella
             string drive = Path.GetPathRoot(win);
             list.Add(new Category
             {
-                Group = system, Name = L.T("cat.driver_installers.name"), UsesAgeFilter = true, RemoveEmptyDirs = true,
+                Id = "driver_installers", Group = system, Name = L.T("cat.driver_installers.name"), UsesAgeFilter = true, RemoveEmptyDirs = true,
                 Description = L.T("cat.driver_installers.desc", Env.Combine(drive, "AMD"), Env.Combine(drive, "NVIDIA"), Env.Combine(drive, "Intel"), Env.Combine(drive, "MSI")),
             }.Dir(Env.Combine(drive, "AMD"))
              .Dir(Env.Combine(drive, "NVIDIA"))
@@ -144,10 +147,17 @@ namespace Sweepfella
             // the drive root. They carry a High integrity label, so deleting them needs admin.
             list.Add(new Category
             {
-                Group = system, Name = L.T("cat.sdk_strays.name"), DefaultChecked = true, RequiresAdmin = true,
+                Id = "sdk_strays", Group = system, Name = L.T("cat.sdk_strays.name"), DefaultChecked = true, RequiresAdmin = true,
                 Description = L.T("cat.sdk_strays.desc", drive),
             }.Files(drive, "appverifUI.dll")
              .Files(drive, "vfcompat.dll"));
+
+            // A safety net, so never on by default; the newest point always stays.
+            list.Add(new Category
+            {
+                Id = "restore_points", Group = system, Name = L.T("cat.restore_points.name"), RequiresAdmin = true, UsesAgeFilter = true, IsRestorePoints = true,
+                Description = L.T("cat.restore_points.desc"),
+            });
 
             AddChromium(list, "Google Chrome", "chrome", Env.Combine(local, "Google", "Chrome", "User Data"));
             AddChromium(list, "Microsoft Edge", "msedge", Env.Combine(local, "Microsoft", "Edge", "User Data"));
@@ -164,7 +174,7 @@ namespace Sweepfella
         {
             var c = new Category
             {
-                Group = L.T("cat.group.browsers"), Name = L.T("cat.browser.name", app), AppName = app, Processes = new[] { process }, DefaultChecked = true,
+                Id = "browser." + app.Replace(" ", "").ToLowerInvariant(), Group = L.T("cat.group.browsers"), Name = L.T("cat.browser.name", app), AppName = app, Processes = new[] { process }, DefaultChecked = true,
                 Description = L.T("cat.browser.desc", app),
             };
             foreach (var b in bases)
@@ -183,7 +193,7 @@ namespace Sweepfella
         {
             var c = new Category
             {
-                Group = L.T("cat.group.browsers"), Name = L.T("cat.browser.name", "Mozilla Firefox"), AppName = "Mozilla Firefox", Processes = new[] { "firefox" }, DefaultChecked = true,
+                Id = "browser.firefox", Group = L.T("cat.group.browsers"), Name = L.T("cat.browser.name", "Mozilla Firefox"), AppName = "Mozilla Firefox", Processes = new[] { "firefox" }, DefaultChecked = true,
                 Description = L.T("cat.firefox.desc"),
             };
             foreach (var p in Env.SubDirs(profilesDir))
@@ -204,6 +214,7 @@ namespace Sweepfella
         public string Name;
         public string Location;    // containing folder (for the Recycle Bin, where it was deleted from)
         public DateTime? Deleted;  // Recycle Bin items only
+        public string Summary;     // shown when selected, instead of the path (restore points)
         public long Bytes;
         public int Files;
     }
@@ -229,6 +240,11 @@ namespace Sweepfella
                 else RecycleBinItems(clean, only, r, ct);
                 return r;
             }
+            if (c.IsRestorePoints)
+            {
+                RestorePointItems(c, clean, c.UsesAgeFilter ? cutoffUtc : DateTime.MinValue, only, r, ct);
+                return r;
+            }
             Visit(c, clean, cutoffUtc, only, ct, (e, part) =>
             {
                 r.Files += part.Files;
@@ -243,6 +259,12 @@ namespace Sweepfella
         {
             var list = new List<Entry>();
             if (c.IsRecycleBin) list.AddRange(RecycleBin.Items().Select(i => i.ToEntry()));
+            else if (c.IsRestorePoints)
+            {
+                list.AddRange(RestorePoints.Old(c.UsesAgeFilter ? cutoffUtc : DateTime.MinValue).Select(RestorePointEntry));
+                c.SizeUpTo = list.Count > 0 ? RestorePoints.StorageUsed() : 0;
+                return list;   // oldest first, like Windows lists them
+            }
             else Visit(c, false, cutoffUtc, null, ct, (e, part) => { if (e != null) list.Add(e); });
             return list.OrderByDescending(e => e.Bytes).ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
@@ -396,6 +418,43 @@ namespace Sweepfella
                 else r.Failed++;
             }
             if (clean) RecycleBin.RefreshIcon();
+        }
+
+        static Entry RestorePointEntry(RestorePoints.Point p)
+        {
+            string name = p.Description.Length > 0 ? p.Description : L.T("cat.restore_points.unnamed");
+            return new Entry
+            {
+                Path = p.Key, Name = name, Files = 1,
+                Location = L.T("cat.restore_points.created", p.Created.ToString("g"), Ui.Ago(p.Created)),
+                Summary = L.T("cat.restore_points.entry", name, p.Created.ToString("g"), Ui.Ago(p.Created)),
+            };
+        }
+
+        /// <summary>
+        /// Counts (or deletes) the restore points a cleanup may remove. Space freed is the drop in shadow storage,
+        /// the only figure Windows gives; analyzing records the current total as the most that could be freed.
+        /// </summary>
+        static void RestorePointItems(Category c, bool clean, DateTime cutoffUtc, ICollection<string> only, Result r, CancellationToken ct)
+        {
+            var old = RestorePoints.Old(cutoffUtc).Where(p => Allowed(only, p.Key)).ToList();
+            long before = old.Count > 0 ? RestorePoints.StorageUsed() : 0;
+            if (!clean)
+            {
+                r.Files = old.Count;
+                c.SizeUpTo = before;
+                return;
+            }
+            foreach (var p in old)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (RestorePoints.Remove(p)) r.Files++;
+                else r.Failed++;
+            }
+            if (r.Files == 0) return;
+            long after = RestorePoints.StorageUsed();
+            if (before >= 0 && after >= 0) r.Bytes = Math.Max(0, before - after);
+            c.SizeUpTo = after;
         }
 
         /// <summary>Deletes a whole file or folder tree (used for Recycle Bin items). True if nothing is left.</summary>

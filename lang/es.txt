@@ -103,6 +103,13 @@ cleaner.status.done_failed = {0:N0} archivos estaban en uso y se omitieron.
 cleaner.status.total = Total acumulado: {0}.
 cleaner.status.nothing = No hay nada que limpiar.
 cleaner.status.can_free = Se pueden liberar {0}. Pulsa Limpiar para borrarlos.
+cleaner.select = Seleccionar:
+cleaner.select.all = Todo
+cleaner.select.none = Nada
+cleaner.select.recommended = Recomendado
+cleaner.state.size_unknown = tamaño conocido al limpiar
+cleaner.state.size_up_to = libera hasta {0}
+cleaner.confirm.restore_points = No podrás devolver Windows a los puntos de restauración que se borren. El más reciente, «{0}» del {1}, se conserva. Windows solo informa de su tamaño una vez borrados, así que no entran en la estimación.
 
 # ---- Cleanup categories ----
 cat.group.system = Sistema
@@ -127,6 +134,11 @@ cat.driver_installers.name = Instaladores de drivers (AMD, NVIDIA, Intel)
 cat.driver_installers.desc = Archivos que los instaladores de drivers de AMD, NVIDIA e Intel descomprimen en {0}, {1} y {2} y nunca borran. Cada actualización del driver suma otro GB o dos. El driver instalado no los necesita; para reinstalar, basta con volver a descargar el instalador. Esas carpetas, y {3} si está vacía, se eliminan cuando ya no queda nada en ellas; las herramientas de cada fabricante las vuelven a crear cuando las necesitan.
 cat.sdk_strays.name = Archivos del Windows SDK fuera de lugar
 cat.sdk_strays.desc = Dos archivos de Application Verifier (appverifUI.dll y vfcompat.dll) que el instalador del Windows SDK deja por error en la raíz de {0}. Windows no los usa ahí. Pueden volver a aparecer tras una actualización de Visual Studio o del SDK.
+cat.restore_points.name = Puntos de restauración antiguos
+cat.restore_points.desc = Puntos de restauración del sistema, salvo el más reciente, que siempre se conserva, y los de las últimas 24 horas mientras esa opción de abajo esté marcada. Windows los crea antes de actualizaciones e instalaciones de drivers o programas, y entre todos pueden ocupar varios GB. No podrás devolver Windows a los que se borren. Windows no informa del tamaño de cada punto: Estado muestra lo máximo que podría liberarse (lo que ocupan todos juntos), y lo realmente liberado se muestra al limpiar.
+cat.restore_points.unnamed = (sin descripción)
+cat.restore_points.created = creado {0} · {1}
+cat.restore_points.entry = Punto de restauración «{0}», creado el {1} ({2}). Al limpiar se borra: después no podrás devolver Windows a ese punto.
 cat.browser.name = Caché de {0}
 cat.browser.desc = Copias de páginas web, scripts y shaders que {0} guarda para cargar más rápido. No borra historial, cookies, contraseñas ni pestañas.
 cat.firefox.desc = Copias de páginas web y miniaturas que Firefox guarda para cargar más rápido. No borra historial, cookies, contraseñas ni pestañas.

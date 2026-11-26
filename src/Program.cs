@@ -58,7 +58,8 @@ namespace Sweepfella
             {
                 if (c.RequiresAdmin && !admin) { Console.WriteLine("{0,-42} {1}", c.Name, L.T("cli.requires_admin")); continue; }
                 var r = Cleaner.Run(c, false, cutoff, CancellationToken.None);
-                Console.WriteLine(L.T("cli.analyze_line", c.Name, r.Files, Bytes.Format(r.Bytes)));
+                Console.WriteLine(L.T("cli.analyze_line", c.Name, r.Files, c.IsRestorePoints ? "?" : Bytes.Format(r.Bytes))
+                                  + (c.IsRestorePoints && c.SizeUpTo > 0 ? "  " + L.T("cleaner.state.size_up_to", Bytes.Format(c.SizeUpTo)) : ""));
                 total += r.Bytes;
             }
             Console.WriteLine(L.T("cli.total", Bytes.Format(total)));
@@ -73,12 +74,12 @@ namespace Sweepfella
                 var entries = Cleaner.List(c, cutoff, CancellationToken.None);
                 Console.WriteLine("== {0} ({1}){2}", c.Name, entries.Count, c.RequiresAdmin && !admin ? " " + L.T("cli.requires_admin") : "");
                 foreach (var e in entries)
-                    Console.WriteLine("  {0,10} {1,7:N0}  {2}{3}", Bytes.Format(e.Bytes), e.Files,
-                                      Path.Combine(e.Location ?? "", e.Name), e.Deleted.HasValue ? "  (" + Ui.Ago(e.Deleted.Value) + ")" : "");
+                    Console.WriteLine("  {0,10} {1,7:N0}  {2}{3}", c.IsRestorePoints ? "?" : Bytes.Format(e.Bytes), e.Files,
+                                      e.Summary ?? Path.Combine(e.Location ?? "", e.Name), e.Deleted.HasValue ? "  (" + Ui.Ago(e.Deleted.Value) + ")" : "");
             }
         }
 
-                static void Registry()
+        static void Registry()
         {
             var findings = RepairScanner.Scan();
             foreach (var area in RepairScanner.Areas)

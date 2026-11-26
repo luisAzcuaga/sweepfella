@@ -10,7 +10,10 @@ Temporary files, Recycle Bin, error reports and crash dumps, thumbnail cache, Di
 (Chrome, Edge, Brave, Vivaldi, Opera, Firefox — cache only: history, cookies and passwords are never touched).
 It also finds copies of older Sweepfella versions (and their zips) in Downloads, Desktop and Documents, files that
 AMD, NVIDIA and Intel driver installers leave in `C:\AMD`, `C:\NVIDIA` and `C:\Intel`, and the Application Verifier DLLs
-the Windows SDK installer drops in the drive root by mistake.
+the Windows SDK installer drops in the drive root by mistake. As administrator it can also delete old System Restore
+points, always keeping the newest one (off by default; Windows doesn't report a restore point's size, so Sweepfella
+shows the most it could free and measures what was actually freed afterwards).
+**All**, **None** and **Recommended** above the list check categories in one click.
 Expand any category with its arrow to see exactly what it would delete (each Recycle Bin item, each file or folder) and
 uncheck what you want to keep. Analyze first, confirm, then clean. Temporary files from the last 24 hours are kept by default so running installers don't break.
 Freed space is counted towards a lifetime total; for uninstalls it's measured as the free space each drive actually
@@ -44,8 +47,8 @@ Windows silently destroying it. Folders you mark as ignored never show up again.
 ## Portable, no traces
 
 Sweepfella never installs anything and keeps no data outside its own folder. The only file it may create is
-`Sweepfella.ini`, next to `Sweepfella.exe`, and only once you change something (language, window size, ignored
-folders) or free some space. Deleting both files removes Sweepfella completely. Give it its own folder, such as
+`Sweepfella.ini`, next to `Sweepfella.exe`, and only once you change something (language, window size, which Cleanup
+categories you check, ignored folders) or free some space. Deleting both files removes Sweepfella completely. Give it its own folder, such as
 `Documents\Sweepfella`; in a read-only folder like Program Files it still works, it just can't remember anything.
 
 The About dialog shows where the settings live, how much space Sweepfella has freed so far, and a
